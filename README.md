@@ -41,6 +41,8 @@ Multiplayer joins everyone who is on the **same course** (same seed, stages and 
 2. Click **Copy link** and send it to your friends.
 3. When they open it, you'll see them in the game and the top right shows how many people are online.
 
+Want to play solo? Click **🌐 Multiplayer on** in the menu to switch to **📴 Offline mode** — you won't connect to anyone, and the game remembers your choice. Click it again to go back online.
+
 Players connect directly to each other (WebRTC peer-to-peer via [Trystero](https://github.com/dmotz/trystero)); public relays are only used to help players find each other. Don't share personal info in chat — anyone on the same course can see it.
 
 ## Running it yourself

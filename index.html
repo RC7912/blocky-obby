@@ -127,6 +127,9 @@
     <button id="soundBtn">🔊 Sound</button>
     <button id="musicBtn">🎵 Music</button>
   </div>
+  <div class="row">
+    <button id="netBtn" class="primary">🌐 Multiplayer on</button>
+  </div>
 </div>
 <div id="hud" class="panel">
   Stage <b id="stage">0</b> / <span id="total">0</span><br>
@@ -1275,7 +1278,10 @@ for (const id of ['seed', 'stages']) $(id).addEventListener('keydown', e => { if
 // public Nostr relays are only used to find each other (Trystero).
 const TRYSTERO = 'https://cdn.jsdelivr.net/npm/trystero@0.25.4/+esm';
 const SEND_RATE = 1 / 15, MAX_PEERS = 24;
-const mp = { lib: null, room: null, key: '', peers: new Map(), sendT: 0 };
+const mp = { lib: null, room: null, key: '', course: '', peers: new Map(), sendT: 0 };
+// offline mode: play solo without connecting to anyone
+let mpOffline = false;
+try { mpOffline = localStorage.getItem('obbyOnline') === 'off'; } catch (e) {}
 let myName = '';
 try { myName = localStorage.getItem('obbyName') || ''; } catch (e) {}
 const cleanName = s => String(s ?? '').replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 16);
@@ -1362,14 +1368,19 @@ $('chatIn').addEventListener('keydown', e => {
 $('chatIn').addEventListener('blur', e => { e.target.style.display = 'none'; });
 
 function onlineText() {
-  $('online').textContent = !mp.room ? 'offline' : `${mp.peers.size + 1} online`;
+  $('online').textContent = mpOffline ? 'offline mode' : !mp.room ? 'offline' : `${mp.peers.size + 1} online`;
+  $('netBtn').textContent = mpOffline ? '📴 Offline mode' : '🌐 Multiplayer on';
+  $('netBtn').classList.toggle('primary', !mpOffline);
 }
-async function mpJoin(key) {
+async function mpJoin(course) {
+  mp.course = course;
+  const key = mpOffline ? '' : course;
   if (key === mp.key) return;
   mp.key = key;
   mp.room?.leave();
   mp.room = null;
   for (const id of [...mp.peers.keys()]) removePeer(id);
+  if (!key) { onlineText(); return; }
   $('online').textContent = 'connecting…';
   try { mp.lib ??= await import(TRYSTERO); }
   catch (e) { $('online').textContent = 'offline'; return; }
@@ -1430,6 +1441,15 @@ async function mpJoin(key) {
   };
   onlineText();
 }
+$('netBtn').onclick = e => {
+  mpOffline = !mpOffline;
+  try { localStorage.setItem('obbyOnline', mpOffline ? 'off' : 'on'); } catch (err) {}
+  sysLine(mpOffline ? 'Offline mode: playing solo' : 'Multiplayer on');
+  onlineText();
+  mpJoin(mp.course);
+  e.target.blur();
+};
+onlineText();
 function mpHello() { if (mp.room) mp.hi.send(hello()); }
 function mpEvent(d) { if (mp.room && mp.peers.size) mp.ev.send(d); }
 
