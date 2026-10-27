@@ -123,7 +123,7 @@
   Stage <b id="stage">0</b> / <span id="total">0</span><br>
   ⏱ <span id="time">0.0</span>s &nbsp; 💀 <span id="deaths">0</span>
 </div>
-<div id="help" class="panel">WASD move · Space jump (again in air = double jump) · Click + mouse to look · Wheel zoom · R respawn · M music · 1-9 emotes</div>
+<div id="help" class="panel">WASD move · Space jump (again in air = double jump) · Click + mouse to look · Wheel zoom · R respawn · M music · 1-9 emotes · X explode</div>
 <div id="emotes" class="panel"></div>
 <div id="flash"></div>
 <div id="win"><div class="panel">
@@ -1020,6 +1020,7 @@ addEventListener('keydown', e => {
   if (e.code === 'KeyR') respawn();
   const n = /^Digit([1-9])$/.exec(e.code);
   if (n) playEmote(n[1] - 1);
+  if (e.code === 'KeyX' && !e.repeat) explode();
   if (e.code === 'Space') { e.preventDefault(); if (!e.repeat) jumpQueued = true; }
 });
 addEventListener('keyup', e => { keys[e.code] = false; });
@@ -1224,6 +1225,13 @@ EMOTES.forEach((em, i) => {
   b.onclick = () => { playEmote(i); b.blur(); };
   $('emotes').appendChild(b);
 });
+{
+  const b = document.createElement('button');
+  b.title = 'Explode (X)';
+  b.innerHTML = '<small>X</small>💥';
+  b.onclick = () => { explode(); b.blur(); };
+  $('emotes').appendChild(b);
+}
 $('soundBtn').onclick = e => {
   soundOn = !soundOn;
   if (master) master.gain.value = soundOn ? 0.5 : 0;
