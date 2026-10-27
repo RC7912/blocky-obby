@@ -37,6 +37,9 @@
   #hud { top: 12px; right: 12px; text-align: right; line-height: 1.3; min-width: 150px; font-size: 22px; }
   #hud b { font-family: "Press Start 2P", monospace; font-size: 18px; color: #ffff55; }
   #help { bottom: 12px; left: 12px; color: #d0d0d0; font-size: 18px; }
+  #emotes { bottom: 64px; left: 50%; transform: translateX(-50%); display: flex; gap: 4px; padding: 6px; }
+  #emotes button { flex: none; position: relative; width: 44px; height: 44px; padding: 0; font-size: 22px; text-shadow: none; }
+  #emotes button small { position: absolute; top: 1px; left: 4px; font-size: 13px; color: #fff; text-shadow: 1px 1px 0 #000; }
   #flash { position: fixed; inset: 0; background: #ff2a2a; opacity: 0; pointer-events: none; transition: opacity .35s; }
   #win { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,.5); }
   #win .panel { position: static; text-align: center; padding: 24px 32px; }
@@ -56,6 +59,8 @@
   @media (pointer: coarse) {
     #jumpBtn { display: block; }
     #help { display: none; }
+    #emotes { bottom: 12px; left: 12px; transform: none; display: grid; grid-template-columns: repeat(3, 44px); }
+    #emotes button small { display: none; }
   }
   @media (max-width: 640px) {
     #gen { width: calc(100% - 24px); }
@@ -118,7 +123,8 @@
   Stage <b id="stage">0</b> / <span id="total">0</span><br>
   ⏱ <span id="time">0.0</span>s &nbsp; 💀 <span id="deaths">0</span>
 </div>
-<div id="help" class="panel">WASD move · Space jump (again in air = double jump) · Click + mouse to look · Wheel zoom · R respawn · M music</div>
+<div id="help" class="panel">WASD move · Space jump (again in air = double jump) · Click + mouse to look · Wheel zoom · R respawn · M music · 1-9 emotes</div>
+<div id="emotes" class="panel"></div>
 <div id="flash"></div>
 <div id="win"><div class="panel">
   <h2>🏆 You beat the obby!</h2>
@@ -727,7 +733,7 @@ function updateParticles(dt) {
 // sq: squash/stretch spring (1 = rest). p: smoothed body pose values.
 const fx = {
   flip: -1, flipAxis: 'x', trailT: 0, shake: 0, fovKick: 0, stepSign: 0, idleT: 0,
-  sq: { x: 1, v: 0 }, p: { hop: 0, bodyY: 0, bodyZ: 0, lean: 0 },
+  sq: { x: 1, v: 0 }, p: { hop: 0, bodyY: 0, bodyZ: 0, lean: 0, pitch: 0 },
 };
 function trick() { fx.flip = 0; fx.flipAxis = Math.random() < 0.5 ? 'x' : 'y'; }
 
@@ -867,6 +873,69 @@ function meme(kind) {
 }
 const easeOutBack = x => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * (x - 1) ** 3 + c1 * (x - 1) ** 2; };
 
+// ---------- Emotes ----------
+// pose(e, p, beat) fills the target pose e seconds into the emote; dur 0 = loop until you move.
+// Arm x: negative swings forward/up (±π = straight up). Arm z: outward is -left / +right.
+const laughSfx = sfx(() => [0, 1, 2, 3].forEach(i => tone('square', 560 - i * 40, 400 - i * 40, 0.1, 0.06, i * 0.15)));
+const whooshSfx = sfx(() => noiseHit(0.5, 0.25, 1200, 0, 'bandpass'));
+const EMOTES = [
+  { icon: '🕺', name: 'Dance', dur: 0, pose(e, p, beat) {
+    const b = beat * Math.PI, s = Math.sin(b), bounce = Math.abs(Math.cos(b));
+    p.hop = bounce * 0.6; p.sq = 1 - (1 - bounce) * 0.12;
+    p.armLx = -1.2 + s * 1.1; p.armRx = -1.2 - s * 1.1; p.armLz = -0.5; p.armRz = 0.5;
+    p.legL = Math.min(0, s) * 0.9; p.legR = Math.min(0, -s) * 0.9;
+    p.bodyY = Math.sin(b / 2) * 0.5; p.bodyZ = s * 0.12; p.headZ = -s * 0.3; p.headX = Math.cos(b * 2) * 0.15;
+  } },
+  { icon: '👋', name: 'Wave', dur: 2.4, sound: () => SFX.pop(), pose(e, p) {
+    p.armRx = -2.7; p.armRz = 0.3 + Math.sin(e * 14) * 0.45;
+    p.armLx = 0.1; p.armLz = -0.15; p.headZ = 0.2; p.bodyZ = -0.06;
+  } },
+  { icon: '😎', name: 'Dab', dur: 1.8, sound: () => SFX.boom(), pose(e, p) {
+    p.armRx = -2.3; p.armRz = 1.2;   // right arm up and out
+    p.armLx = -1.5; p.armLz = 1.4;   // left arm across the face
+    p.headX = 0.6; p.headZ = -0.5; p.bodyZ = 0.18; p.bodyY = -0.3; p.sq = 0.95;
+  } },
+  { icon: '🧵', name: 'Floss', dur: 0, pose(e, p) {
+    const w = Math.sin(e * 9);
+    p.armLz = w * 0.7; p.armRz = w * 0.7;   // both arms sweep the same way
+    p.armLx = Math.cos(e * 18) * 0.5; p.armRx = -Math.cos(e * 18) * 0.5;
+    p.bodyZ = -w * 0.18; p.bodyY = -w * 0.1; p.hop = Math.abs(w) * 0.15; p.headZ = w * 0.15;
+  } },
+  { icon: '🪑', name: 'Sit', dur: 0, pose(e, p) {
+    p.legL = p.legR = -1.5; p.hop = -1.9; p.pitch = -0.1;
+    p.armLx = p.armRx = -0.7; p.armLz = -0.1; p.armRz = 0.1;
+    p.headX = Math.sin(e * 1.5) * 0.1; p.headZ = Math.sin(e * 0.8) * 0.15;
+  } },
+  { icon: '🙌', name: 'Cheer', dur: 0, sound: () => SFX.ding(), pose(e, p) {
+    const a = Math.abs(Math.sin(e * 6));
+    p.hop = a * 1.4; p.sq = 0.92 + a * 0.2;
+    p.armLx = -3 + Math.sin(e * 24) * 0.25; p.armRx = -3 - Math.sin(e * 24) * 0.25; p.armLz = -0.45; p.armRz = 0.45;
+    p.legL = -a * 0.6; p.legR = a * 0.3; p.headX = -0.3;
+  } },
+  { icon: '🌀', name: 'Breakdance', dur: 0, sound: () => whooshSfx(), pose(e, p) {
+    p.spin = 12; p.armLz = -1.5; p.armRz = 1.5;
+    p.legL = Math.sin(e * 12) * 0.8; p.legR = -p.legL;
+    p.hop = 0.3 + Math.abs(Math.sin(e * 6)) * 0.3; p.headX = -0.2;
+  } },
+  { icon: '😂', name: 'Laugh', dur: 2.2, sound: () => laughSfx(), pose(e, p) {
+    p.pitch = -0.35; p.headX = -0.5; p.bodyZ = Math.sin(e * 30) * 0.07; p.hop = Math.abs(Math.sin(e * 15)) * 0.15;
+    p.armLx = -0.9; p.armLz = 0.7; p.armRx = -0.9; p.armRz = -0.7;   // hands on belly
+  } },
+  { icon: '🪦', name: 'Play dead', dur: 0, sound: () => SFX.oof(), pose(e, p) {
+    p.pitch = -1.45; p.hop = -1.6; p.sq = 1;
+    p.armLz = -1.3; p.armRz = 1.3; p.legL = -0.3; p.legR = 0.2; p.headZ = 0.5;
+  } },
+];
+let emote = null;   // { def, t }
+function playEmote(i) {
+  const def = EMOTES[i];
+  if (!def || !pl.grounded) return;
+  emote = { def, t: 0 };
+  fx.idleT = 0; fx.sq.v += 6;
+  def.sound?.();
+  flashText(`${def.icon} ${def.name}`);
+}
+
 const PR = 0.9, PH = 2.5;               // player half-width, half-height
 const SPEED = 16, JUMP = 22, GRAV = 60, BOUNCE = 37;
 const pl = { x: 0, y: 3, z: 0, vx: 0, vy: 0, vz: 0, facing: 0, ground: null, grounded: false, airJumps: 1 };
@@ -877,6 +946,7 @@ function respawn() {
   const cp = checkpoints[cpIndex];
   Object.assign(pl, { x: cp.x, y: cp.y, z: cp.z, vx: 0, vy: 0, vz: 0, ground: null, grounded: false, facing: cp.ang });
   camYaw = cp.ang + Math.PI;
+  emote = null;
 }
 function die() {
   deaths++;
@@ -930,6 +1000,8 @@ addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
   keys[e.code] = true;
   if (e.code === 'KeyR') respawn();
+  const n = /^Digit([1-9])$/.exec(e.code);
+  if (n) playEmote(n[1] - 1);
   if (e.code === 'Space') { e.preventDefault(); if (!e.repeat) jumpQueued = true; }
 });
 addEventListener('keyup', e => { keys[e.code] = false; });
@@ -1127,6 +1199,13 @@ function customize() {
 for (const k of PARTS) $('c_' + k).addEventListener('input', customize);
 $('trailSel').onchange = e => { customize(); e.target.blur(); };
 $('glow').onchange = e => { customize(); e.target.blur(); };
+EMOTES.forEach((em, i) => {
+  const b = document.createElement('button');
+  b.title = `${em.name} (${i + 1})`;
+  b.innerHTML = `<small>${i + 1}</small>${em.icon}`;
+  b.onclick = () => { playEmote(i); b.blur(); };
+  $('emotes').appendChild(b);
+});
 $('soundBtn').onclick = e => {
   soundOn = !soundOn;
   if (master) master.gain.value = soundOn ? 0.5 : 0;
@@ -1165,8 +1244,11 @@ function frame(now) {
   // ---- tweenslop animation: springy squash/stretch, bobble head, flailing limbs ----
   const u = character.userData, t = now / 1000;
   const speedK = Math.hypot(pl.vx, pl.vz) / SPEED, moving = speedK > 0.06;
-  const pose = { legL: 0, legR: 0, armLx: 0, armRx: 0, armLz: 0, armRz: 0, headX: 0, headZ: 0, hop: 0, bodyY: 0, bodyZ: 0, lean: 0 };
+  const pose = { legL: 0, legR: 0, armLx: 0, armRx: 0, armLz: 0, armRz: 0, headX: 0, headZ: 0, hop: 0, bodyY: 0, bodyZ: 0, lean: 0, pitch: 0, sq: 0, spin: 0 };
   let sqTarget = 1, windmill = false;
+  // beat clock: locked to the music when it's on, otherwise 120 BPM
+  const beat = musicOn ? (actx.currentTime - musicStart) * BPM / 60 : t * 2;
+  if (emote && (!pl.grounded || moving)) emote = null;
   if (pl.grounded && moving) {
     // bouncy cartoon run: hop every step, twisting hips, arms flailing wide
     fx.idleT = 0;
@@ -1179,9 +1261,14 @@ function frame(now) {
     pose.headZ = Math.sin(walkPhase * 2) * 0.25; pose.headX = -a * 0.2;
     const sign = Math.sign(s);
     if (sign !== fx.stepSign) { fx.stepSign = sign; fx.sq.v -= 2.5; }
+  } else if (pl.grounded && emote) {
+    emote.t += dt;
+    emote.def.pose(emote.t, pose, beat);
+    if (pose.sq) sqTarget = pose.sq;
+    fx.idleT = 0;
+    if (emote.def.dur && emote.t > emote.def.dur) emote = null;
   } else if (pl.grounded) {
     // idle groove, locked to the beat when the music is on
-    const beat = musicOn ? (actx.currentTime - musicStart) * BPM / 60 : t * 2;
     const b = beat * Math.PI, bounce = Math.abs(Math.cos(b));
     pose.hop = bounce * 0.4; sqTarget = 1 - (1 - bounce) * 0.1;
     pose.bodyZ = Math.sin(b / 2) * 0.18; pose.bodyY = Math.sin(b / 4) * 0.3;
@@ -1219,7 +1306,10 @@ function frame(now) {
   L(u.armL.rotation, 'z', pose.armLz); L(u.armR.rotation, 'z', pose.armRz);
   L(u.legL.rotation, 'x', pose.legL); L(u.legR.rotation, 'x', pose.legR);
   L(u.head.rotation, 'x', pose.headX); L(u.head.rotation, 'z', pose.headZ);
-  for (const key of ['hop', 'bodyY', 'bodyZ', 'lean']) L(fx.p, key, pose[key]);
+  // continuous spins accumulate; everything else eases toward its target
+  if (pose.spin) fx.p.bodyY += pose.spin * dt;
+  else { fx.p.bodyY = wrap(fx.p.bodyY); L(fx.p, 'bodyY', pose.bodyY); }
+  for (const key of ['hop', 'bodyZ', 'lean', 'pitch']) L(fx.p, key, pose[key]);
 
   // under-damped spring = jelly overshoot; volume-preserving squash
   fx.sq.v += ((sqTarget - fx.sq.x) * 260 - fx.sq.v * 9) * dt;
@@ -1239,7 +1329,7 @@ function frame(now) {
   character.position.set(pl.x, pl.y, pl.z);
   u.body.scale.set(sxz, sy, sxz);
   u.body.position.y = fx.p.hop + 2.5 * (sy - 1); // keep feet planted while squashing
-  u.body.rotation.set(fx.p.lean * speedK + flipX, fx.p.bodyY + spinY, fx.p.bodyZ);
+  u.body.rotation.set(fx.p.lean * speedK + fx.p.pitch + flipX, fx.p.bodyY + spinY, fx.p.bodyZ);
 
   // cape flaps with speed and falling
   const flap = Math.sin(now / 90) * 0.12 * (0.3 + speedK);
