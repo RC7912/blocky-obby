@@ -44,6 +44,11 @@
   #win { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,.5); }
   #win .panel { position: static; text-align: center; padding: 24px 32px; }
   #win h2 { margin: 0 0 12px; font-family: "Press Start 2P", monospace; font-size: 20px; line-height: 1.5; color: #ffff55; }
+  #chat { left: 12px; bottom: 166px; max-width: min(360px, 70vw); padding: 6px 10px; font-size: 18px; line-height: 1.25; pointer-events: none; display: none; }
+  #chat div { overflow-wrap: anywhere; }
+  #chat .sys { color: #ffff55; }
+  #chat b { color: #55ffff; font-weight: normal; }
+  #chatIn { position: fixed; left: 12px; bottom: 128px; width: min(360px, 70vw); padding: 4px 8px; border: 2px solid #fff; background: rgba(0, 0, 0, .75); color: #fff; font: 18px "VT323", monospace; outline: none; display: none; }
   #toast { font-family: "Press Start 2P", monospace; }
   .meme { position: fixed; z-index: 5; pointer-events: none; white-space: nowrap; font-family: "Press Start 2P", monospace; font-size: 26px;
     text-shadow: 3px 3px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000;
@@ -61,6 +66,8 @@
     #help { display: none; }
     #emotes { bottom: 12px; left: 12px; transform: none; display: grid; grid-template-columns: repeat(3, 44px); }
     #emotes button small { display: none; }
+    #chat { bottom: auto; top: 64px; }
+    #chatIn { bottom: auto; top: 12px; z-index: 5; }
   }
   @media (max-width: 640px) {
     #gen { width: calc(100% - 24px); }
@@ -74,6 +81,8 @@
 <div id="gen" class="panel">
   <button id="toggle">☰</button>
   <h1>Blocky Obby</h1>
+  <label for="nick">Your name</label>
+  <input id="nick" maxlength="16">
   <label for="seed">Seed</label>
   <input id="seed" value="obby">
   <label for="stages">Stages</label>
@@ -121,10 +130,13 @@
 </div>
 <div id="hud" class="panel">
   Stage <b id="stage">0</b> / <span id="total">0</span><br>
-  ⏱ <span id="time">0.0</span>s &nbsp; 💀 <span id="deaths">0</span>
+  ⏱ <span id="time">0.0</span>s &nbsp; 💀 <span id="deaths">0</span><br>
+  🌐 <span id="online">connecting…</span>
 </div>
-<div id="help" class="panel">WASD move · Space jump (again in air = double jump) · Click + mouse to look · Wheel zoom · R respawn · M music · 1-9 emotes · X explode</div>
+<div id="help" class="panel">WASD move · Space jump (again in air = double jump) · Click + mouse to look · Wheel zoom · R respawn · M music · 1-9 emotes · X explode · T chat</div>
 <div id="emotes" class="panel"></div>
+<div id="chat" class="panel"></div>
+<input id="chatIn" maxlength="80" placeholder="Say something… (Enter to send, Esc to cancel)">
 <div id="flash"></div>
 <div id="win"><div class="panel">
   <h2>🏆 You beat the obby!</h2>
@@ -629,7 +641,7 @@ const pantsTex = pixelTex((g, s) => {
 }, 16, false);
 const phong = extra => new THREE.MeshLambertMaterial(extra);
 
-const mats = {
+const makeMats = () => ({
   skin: phong(),
   face: phong({ map: faceTex }),
   torso: phong({ map: fabricTex }),
@@ -639,10 +651,14 @@ const mats = {
   hat: phong({ map: fabricTex }),
   shades: new THREE.MeshPhongMaterial({ color: 0x0a0a0a, specular: 0xffffff, shininess: 120 }),
   shine: new THREE.MeshBasicMaterial({ color: 0xffffff }),
-};
+});
+const mats = makeMats();
 let currentSkin = SKINS.classic;
 function applySkin(s) {
   currentSkin = s;
+  paintMats(mats, s);
+}
+function paintMats(mats, s) {
   mats.skin.color.set(s.skin); mats.face.color.set(s.skin);
   for (const k of ['torso', 'legs', 'cape', 'hat']) {
     mats[k].color.set(s[k]);
@@ -651,7 +667,7 @@ function applySkin(s) {
   mats.torsoFront.color.copy(mats.torso.color); mats.torsoFront.emissive.copy(mats.torso.emissive);
 }
 
-function makeCharacter() {
+function makeCharacter(mats) {
   const root = new THREE.Group(), body = new THREE.Group();
   root.add(body);
   const mk = (sx, sy, sz, mat, x, y, z = 0, parent = body) => {
@@ -683,7 +699,7 @@ function makeCharacter() {
   root.userData = { body, head, legL, legR, armL, armR, capeTop, capeLow };
   return root;
 }
-const character = makeCharacter();
+const character = makeCharacter(mats);
 scene.add(character);
 let savedSkin = 'classic';
 try { savedSkin = localStorage.getItem('obbySkin') || 'classic'; } catch (e) {}
@@ -704,12 +720,12 @@ function emit(x, y, z, color, vx, vy, vz, life, size, g = 0) {
   p.m.position.set(x, y, z); p.m.material.color.copy(color); p.m.visible = true;
 }
 const tmpColor = new THREE.Color();
-function trailColor() {
-  const t = currentSkin.trail;
+function trailColor(skin = currentSkin) {
+  const t = skin.trail;
   if (t === 'rainbow') return tmpColor.setHSL((performance.now() / 1500) % 1, 1, 0.6);
   if (t === 'fire') return tmpColor.setHSL(Math.random() * 0.12, 1, 0.55);
   if (t === 'sparkle') return tmpColor.setHSL(0.13, 1, 0.75 + Math.random() * 0.25);
-  return tmpColor.set(currentSkin[t] ?? 0xffffff);
+  return tmpColor.set(skin[t] ?? 0xffffff);
 }
 function burst(x, y, z, n, speed, color, life = 0.7, size = 0.5, g = 20) {
   for (let i = 0; i < n; i++) {
@@ -933,6 +949,7 @@ function explode() {
     burst(pl.x, pl.y, pl.z, 25, 24, tmpColor.setHSL(0.02 + Math.random() * 0.1, 1, 0.55), 1.3, 0.9, 25);
   if (soundOn && actx) noiseHit(1.1, 0.9, 700);
   meme('boom');
+  mpEvent({ t: 'boom' });
   die();
   fx.shake = 1.6;
 }
@@ -963,6 +980,7 @@ function die() {
   for (const c of [currentSkin.torso, currentSkin.skin, currentSkin.legs, currentSkin.cape])
     burst(pl.x, pl.y, pl.z, 8, 14, tmpColor.set(c), 1.1, 0.7, 30);
   SFX.oof(); SFX.boom(); meme('death');
+  mpEvent({ t: 'die' });
   fx.shake = 1; fx.sq = { x: 1, v: 0 }; fx.flip = -1;
   const f = document.getElementById('flash');
   f.style.transition = 'none'; f.style.opacity = 0.45;
@@ -986,7 +1004,9 @@ function collide(p) {
       p.mesh.material[2].emissive.setHex(0x1f8a3f);
       burst(p.x, p.y + 1, p.z, 30, 12, tmpColor.set(0x4ade80), 0.9, 0.5, 15);
       if (!p.finish) { SFX.ding(); meme('checkpoint'); trick(); }
-      flashText(p.finish ? '' : `Checkpoint ${p.checkpoint}!`); }
+      flashText(p.finish ? '' : `Checkpoint ${p.checkpoint}!`);
+      if (!p.finish) mpEvent({ t: 'cp', n: p.checkpoint });
+    }
     if (p.finish && !finished) win();
   }
   if (!p.solid) return false;
@@ -1012,6 +1032,7 @@ addEventListener('keydown', e => {
   const n = /^Digit([1-9])$/.exec(e.code);
   if (n) playEmote(n[1] - 1);
   if (e.code === 'KeyX' && !e.repeat) explode();
+  if ((e.code === 'KeyT' || e.code === 'Enter') && !e.repeat) { e.preventDefault(); openChat(); }
   if (e.code === 'Space') { e.preventDefault(); if (!e.repeat) jumpQueued = true; }
 });
 addEventListener('keyup', e => { keys[e.code] = false; });
@@ -1147,6 +1168,7 @@ function flashText(t) {
 }
 function win() {
   finished = true; running = false;
+  mpEvent({ t: 'win', time: elapsed });
   SFX.win(); trick();
   for (let i = 0; i < 3; i++) setTimeout(() => meme('win'), i * 250);
   $('winStats').textContent = `Time: ${elapsed.toFixed(1)}s · Deaths: ${deaths} · Seed: "${$('seed').value}"`;
@@ -1160,6 +1182,7 @@ function start() {
   $('stages').value = stages;
   generate(seed, stages, diff);
   history.replaceState(null, '', `#seed=${encodeURIComponent(seed)}&n=${stages}&d=${diff}`);
+  mpJoin(`${seed}|${stages}|${diff}`);
   cpIndex = 0; deaths = 0; elapsed = 0; running = false; finished = false; simTime = 0;
   $('win').style.display = 'none';
   $('total').textContent = stages;
@@ -1169,7 +1192,7 @@ const randomSeed = () => Math.random().toString(36).slice(2, 8);
 $('genBtn').onclick = start;
 $('randBtn').onclick = () => { $('seed').value = randomSeed(); start(); };
 $('skipBtn').onclick = () => { if (cpIndex < checkpoints.length - 2) { cpIndex++; respawn(); } };
-$('linkBtn').onclick = () => { navigator.clipboard?.writeText(location.href); flashText('Link copied!'); };
+$('linkBtn').onclick = () => { navigator.clipboard?.writeText(location.href); flashText('Link copied! Send it to friends'); };
 $('againBtn').onclick = start;
 $('nextBtn').onclick = () => { $('seed').value = randomSeed(); start(); };
 const PARTS = ['skin', 'torso', 'legs', 'cape', 'hat'];
@@ -1194,7 +1217,7 @@ $('skin').value = savedSkin;
 syncPickers();
 $('skin').onchange = e => {
   applySkin(skinFor(e.target.value));
-  syncPickers(); saveSkin(e.target.value);
+  syncPickers(); saveSkin(e.target.value); mpHello();
   burst(pl.x, pl.y, pl.z, 30, 10, null, 0.8, 0.5, 10);
   e.target.blur();
 };
@@ -1204,7 +1227,7 @@ function customize() {
   for (const k of PARTS) customSkin[k] = parseInt($('c_' + k).value.slice(1), 16);
   addCustomOption();
   $('skin').value = 'custom';
-  applySkin(customSkin); saveSkin('custom');
+  applySkin(customSkin); saveSkin('custom'); mpHello();
 }
 for (const k of PARTS) $('c_' + k).addEventListener('input', customize);
 $('trailSel').onchange = e => { customize(); e.target.blur(); };
@@ -1223,6 +1246,13 @@ EMOTES.forEach((em, i) => {
   b.onclick = () => { explode(); b.blur(); };
   $('emotes').appendChild(b);
 }
+{
+  const b = document.createElement('button');
+  b.title = 'Chat (T)';
+  b.innerHTML = '<small>T</small>💬';
+  b.onclick = () => { b.blur(); openChat(); };
+  $('emotes').appendChild(b);
+}
 $('soundBtn').onclick = e => {
   soundOn = !soundOn;
   if (master) master.gain.value = soundOn ? 0.5 : 0;
@@ -1239,6 +1269,236 @@ $('musicBtn').onclick = e => { toggleMusic(); e.target.blur(); };
 addEventListener('keydown', e => { if (e.code === 'KeyM' && e.target.tagName !== 'INPUT') toggleMusic(); });
 $('toggle').onclick =() => $('gen').classList.toggle('collapsed');
 for (const id of ['seed', 'stages']) $(id).addEventListener('keydown', e => { if (e.key === 'Enter') start(); });
+
+// ---------- Multiplayer ----------
+// Everyone on the same seed/stages/difficulty shares a room. Players talk directly over WebRTC;
+// public Nostr relays are only used to find each other (Trystero).
+const TRYSTERO = 'https://cdn.jsdelivr.net/npm/trystero@0.25.4/+esm';
+const SEND_RATE = 1 / 15, MAX_PEERS = 24;
+const mp = { lib: null, room: null, key: '', peers: new Map(), sendT: 0 };
+let myName = '';
+try { myName = localStorage.getItem('obbyName') || ''; } catch (e) {}
+const cleanName = s => String(s ?? '').replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 16);
+myName = cleanName(myName) || 'Noob' + Math.floor(100 + Math.random() * 900);
+$('nick').value = myName;
+$('nick').addEventListener('change', e => {
+  myName = cleanName(e.target.value) || myName;
+  e.target.value = myName;
+  try { localStorage.setItem('obbyName', myName); } catch (err) {}
+  mpHello();
+});
+$('nick').addEventListener('keydown', e => { if (e.key === 'Enter') e.target.blur(); });
+
+// peers send whatever they like, so only accept well-formed values
+const TRAILS = ['rainbow', 'fire', 'sparkle', ...PARTS];
+function cleanSkin(s) {
+  const out = { glow: Math.min(1, Math.max(0, +s?.glow || 0)), trail: TRAILS.includes(s?.trail) ? s.trail : 'torso' };
+  for (const k of PARTS) out[k] = Number.isInteger(s?.[k]) ? s[k] & 0xffffff : 0x888888;
+  return out;
+}
+const hello = () => ({ name: myName, skin: cleanSkin(currentSkin) });
+
+// pixel-font label with a dark Minecraft-style nameplate
+function labelSprite(text, color, bg, h = 1) {
+  const font = '16px "Press Start 2P", monospace';
+  const c = document.createElement('canvas'), g = c.getContext('2d');
+  g.font = font;
+  c.width = Math.ceil(g.measureText(text).width) + 12; c.height = 26;
+  const t = new THREE.CanvasTexture(c);
+  t.magFilter = THREE.NearestFilter; t.minFilter = THREE.LinearFilter;
+  const draw = () => {
+    g.clearRect(0, 0, c.width, c.height);
+    g.fillStyle = bg; g.fillRect(0, 0, c.width, c.height);
+    g.font = font; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillStyle = color; g.fillText(text, c.width / 2, 14);
+    t.needsUpdate = true;
+  };
+  draw();
+  document.fonts?.load(font).then(draw, () => {});
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, depthWrite: false }));
+  s.scale.set(c.width / 26 * h, h, 1);
+  return s;
+}
+function swapLabel(char, slot, sprite, y) {
+  const old = char.userData[slot];
+  if (old) { char.remove(old); old.material.map.dispose(); old.material.dispose(); }
+  char.userData[slot] = sprite;
+  if (sprite) { sprite.position.y = y; char.add(sprite); }
+}
+const setTag = (char, name) => swapLabel(char, 'tag', labelSprite(name, '#ffffff', 'rgba(0,0,0,.45)'), 4.4);
+function setBubble(char, text) {
+  swapLabel(char, 'bubble', labelSprite(text, '#000000', 'rgba(255,255,255,.9)', 0.75), 5.6);
+  char.userData.bubbleT = 6;
+}
+
+// chat log
+function chatLine(html) {
+  const log = $('chat'), d = document.createElement('div');
+  d.innerHTML = html; log.appendChild(d); log.style.display = 'block';
+  while (log.children.length > 6) log.firstChild.remove();
+  setTimeout(() => { d.remove(); if (!log.children.length) log.style.display = 'none'; }, 12000);
+}
+const esc = s => String(s).replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
+const sysLine = t => chatLine(`<span class="sys">${esc(t)}</span>`);
+function openChat() {
+  for (const k in keys) keys[k] = false;
+  document.exitPointerLock?.();
+  const inp = $('chatIn');
+  inp.style.display = 'block'; inp.value = ''; inp.focus();
+}
+$('chatIn').addEventListener('keydown', e => {
+  e.stopPropagation();
+  if (e.key === 'Escape') e.target.blur();
+  if (e.key !== 'Enter') return;
+  const text = e.target.value.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 80);
+  if (text) {
+    chatLine(`<b>${esc(myName)}:</b> ${esc(text)}`);
+    setBubble(character, text);
+    mpEvent({ t: 'chat', text });
+    SFX.pop();
+  }
+  e.target.blur();
+});
+$('chatIn').addEventListener('blur', e => { e.target.style.display = 'none'; });
+
+function onlineText() {
+  $('online').textContent = !mp.room ? 'offline' : `${mp.peers.size + 1} online`;
+}
+async function mpJoin(key) {
+  if (key === mp.key) return;
+  mp.key = key;
+  mp.room?.leave();
+  mp.room = null;
+  for (const id of [...mp.peers.keys()]) removePeer(id);
+  $('online').textContent = 'connecting…';
+  try { mp.lib ??= await import(TRYSTERO); }
+  catch (e) { $('online').textContent = 'offline'; return; }
+  if (key !== mp.key) return;   // course changed while the library loaded
+  const room = mp.lib.joinRoom({ appId: 'blocky-obby-rc7912' }, key);
+  mp.room = room;
+  mp.hi = room.makeAction('hi'); mp.st = room.makeAction('st'); mp.ev = room.makeAction('ev');
+  room.onPeerJoin = id => mp.hi.send(hello(), { target: id });
+  room.onPeerLeave = id => {
+    const p = mp.peers.get(id);
+    if (p) sysLine(`${p.name} left`);
+    removePeer(id); onlineText();
+  };
+  mp.hi.onMessage = (d, { peerId }) => {
+    let p = mp.peers.get(peerId);
+    if (!p) {
+      if (mp.peers.size >= MAX_PEERS) return;
+      p = addPeer(peerId);
+      mp.hi.send(hello(), { target: peerId });
+    }
+    const name = cleanName(d?.name) || 'Noob';
+    if (name !== p.name) {
+      if (!p.name) { sysLine(`${name} joined`); SFX.pop(); }
+      p.name = name; setTag(p.char, name);
+    }
+    p.skin = cleanSkin(d?.skin); paintMats(p.mats, p.skin);
+    onlineText();
+  };
+  mp.st.onMessage = (d, { peerId }) => {
+    const p = mp.peers.get(peerId);
+    if (!p || !Array.isArray(d) || d.length !== ST_LEN || !d.every(Number.isFinite)) return;
+    p.last = performance.now();
+    if (!p.cur || Math.hypot(d[0] - p.cur[0], d[1] - p.cur[1], d[2] - p.cur[2]) > 12) p.cur = d.slice();
+    p.target = d;
+  };
+  mp.ev.onMessage = (d, { peerId }) => {
+    const p = mp.peers.get(peerId);
+    if (!p?.cur || !d) return;
+    const [x, y, z] = p.cur, near = Math.hypot(x - pl.x, y - pl.y, z - pl.z) < 40;
+    if (d.t === 'boom') {
+      for (let i = 0; i < 3; i++) burst(x, y, z, 20, 24, tmpColor.setHSL(0.02 + Math.random() * 0.1, 1, 0.55), 1.2, 0.9, 25);
+      if (near && soundOn && actx) noiseHit(0.8, 0.5, 700);
+    } else if (d.t === 'die') {
+      for (const c of [p.skin.torso, p.skin.skin, p.skin.legs]) burst(x, y, z, 6, 12, tmpColor.set(c), 1, 0.6, 30);
+      p.cur = null;   // snap to their respawn point
+    } else if (d.t === 'cp' && Number.isInteger(d.n)) {
+      sysLine(`${p.name} reached checkpoint ${d.n}`);
+    } else if (d.t === 'win' && Number.isFinite(d.time)) {
+      sysLine(`🏆 ${p.name} finished in ${d.time.toFixed(1)}s!`);
+      burst(x, y, z, 40, 16, tmpColor.set(0xffd84a), 1.2, 0.6, 10);
+    } else if (d.t === 'chat' && typeof d.text === 'string') {
+      const text = d.text.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 80);
+      if (!text) return;
+      chatLine(`<b>${esc(p.name)}:</b> ${esc(text)}`);
+      setBubble(p.char, text);
+      SFX.pop();
+    }
+  };
+  onlineText();
+}
+function mpHello() { if (mp.room) mp.hi.send(hello()); }
+function mpEvent(d) { if (mp.room && mp.peers.size) mp.ev.send(d); }
+
+function addPeer(id) {
+  const m = makeMats(), char = makeCharacter(m);
+  char.visible = false;
+  scene.add(char);
+  const p = { id, name: '', mats: m, char, skin: cleanSkin(null), cur: null, target: null, last: performance.now(), trailT: 0 };
+  mp.peers.set(id, p);
+  return p;
+}
+function removePeer(id) {
+  const p = mp.peers.get(id);
+  if (!p) return;
+  mp.peers.delete(id);
+  scene.remove(p.char);
+  p.char.traverse(o => { o.geometry?.dispose(); if (o.isSprite) { o.material.map.dispose(); o.material.dispose(); } });
+  for (const m of Object.values(p.mats)) m.dispose();
+}
+
+// pose snapshot: position, facing, then every joint the animation system moves
+const ST_LEN = 22, ANGLES = [3, 4, 5, 6, 10, 11, 13, 14, 15, 16, 17, 18, 19, 20];
+function packState() {
+  const u = character.userData, b = u.body;
+  return [pl.x, pl.y, pl.z, character.rotation.y, b.rotation.x, b.rotation.y, b.rotation.z,
+    b.scale.x, b.scale.y, b.position.y, u.head.rotation.x, u.head.rotation.z, u.head.scale.x,
+    u.legL.rotation.x, u.legR.rotation.x, u.armL.rotation.x, u.armL.rotation.z, u.armR.rotation.x, u.armR.rotation.z,
+    u.capeTop.rotation.x, u.capeLow.rotation.x, cpIndex]
+    .map((v, i) => Math.round((ANGLES.includes(i) ? wrapA(v) : v) * 1000) / 1000);
+}
+const wrapA = a => Math.atan2(Math.sin(a), Math.cos(a));
+function applyState(char, s) {
+  const u = char.userData, b = u.body;
+  char.position.set(s[0], s[1], s[2]); char.rotation.y = s[3];
+  b.rotation.set(s[4], s[5], s[6]);
+  b.scale.set(s[7], s[8], s[7]); b.position.y = s[9];
+  u.head.rotation.x = s[10]; u.head.rotation.z = s[11]; u.head.scale.setScalar(s[12]);
+  u.legL.rotation.x = s[13]; u.legR.rotation.x = s[14];
+  u.armL.rotation.x = s[15]; u.armL.rotation.z = s[16];
+  u.armR.rotation.x = s[17]; u.armR.rotation.z = s[18];
+  u.capeTop.rotation.x = s[19]; u.capeLow.rotation.x = s[20];
+}
+function updatePeers(dt) {
+  const ud = character.userData;
+  if (ud.bubble && (ud.bubbleT -= dt) <= 0) swapLabel(character, 'bubble', null);
+  if (!mp.room) return;
+  mp.sendT -= dt;
+  if (mp.sendT <= 0 && mp.peers.size) { mp.sendT = SEND_RATE; mp.st.send(packState()); }
+  const k = 1 - Math.exp(-dt * 14), now = performance.now();
+  for (const p of mp.peers.values()) {
+    // a backgrounded tab stops sending; hide them until they move again
+    if (!p.target || now - p.last > 15000) { p.char.visible = false; continue; }
+    if (!p.cur) p.cur = p.target.slice();
+    const c = p.cur, t = p.target;
+    const px = c[0], pz = c[2];
+    for (let i = 0; i < ST_LEN; i++)
+      c[i] += (ANGLES.includes(i) ? wrapA(t[i] - c[i]) : t[i] - c[i]) * k;
+    applyState(p.char, c);
+    p.char.visible = true;
+    if (p.char.userData.bubble && (p.char.userData.bubbleT -= dt) <= 0) swapLabel(p.char, 'bubble', null);
+    // their trail
+    p.trailT -= dt;
+    if (p.trailT <= 0 && Math.hypot(c[0] - px, c[2] - pz) > dt * 3) {
+      p.trailT = 0.04;
+      const r = () => (Math.random() - 0.5) * 0.8;
+      emit(c[0] + r(), c[1] - 1.5 + r(), c[2] + r(), trailColor(p.skin), r(), 1 + Math.random() * 2, r(), 0.5, 0.4);
+    }
+  }
+}
 
 // load from URL
 const params = new URLSearchParams(location.hash.slice(1));
@@ -1360,6 +1620,7 @@ function frame(now) {
     const r = () => (Math.random() - 0.5) * 0.8;
     emit(pl.x + r(), pl.y - (pl.grounded ? 2.2 : 0.5) + r(), pl.z + r(), trailColor(), r(), 1 + Math.random() * 2, r(), 0.6, 0.45);
   }
+  updatePeers(dt);
   updateParticles(dt);
   let dYaw = pl.facing - character.rotation.y;
   dYaw = Math.atan2(Math.sin(dYaw), Math.cos(dYaw));
