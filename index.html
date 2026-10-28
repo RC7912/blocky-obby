@@ -190,7 +190,7 @@
   <div id="powerHud"></div>
   🌐 <span id="online">connecting…</span>
 </div>
-<div id="help" class="panel">WASD move · Space jump (again in air = double jump) · Click + mouse to look · Wheel zoom · R respawn · M music · 1-9 emotes · X explode · T chat · 🪙 coins buy hats in the 🛒 shop</div>
+<div id="help" class="panel">WASD move · Space jump (again in air = double jump) · Click + mouse to look · Wheel zoom · R respawn · M music · 1-9 emotes · X explode · T chat · AFK = 💤 · 🪙 coins buy hats in the 🛒 shop</div>
 <div id="emotes" class="panel"></div>
 <div id="chat" class="panel"></div>
 <input id="chatIn" maxlength="80" placeholder="Say something… (Enter to send, Esc to cancel)">
@@ -1268,136 +1268,26 @@ function setMusic(on) {
   }
 }
 
-// ---------- Idle songs: made in code, play while standing still ----------
-const IDLE_VOL = 0.8;
-// A song is a loop of 16th-note steps: play(i, t, out) schedules step i at time t, and
-// accent(beat) says how hard each beat hits (drives how hard the idle dance snaps), and
-// level evens out loudness between songs.
-// Its .audio acts like an <audio> element so the fade / duck / dance code can drive it.
-function synthSong({ bpm, steps, play, accent, level }) {
-  const step = 60 / bpm / 4, len = steps * step, beats = [];
-  for (let b = 0; b < steps / 4; b++) beats.push(+(b * step * 4).toFixed(3), accent(b));
-  let gain = null, vol = 0, timer = null, start = 0, next = 0, idx = 0;
-  const audio = {
-    paused: true,
-    get volume() { return vol; },
-    set volume(v) { vol = v; if (gain) gain.gain.value = v * level; },
-    get currentTime() { return audio.paused ? 0 : ((actx.currentTime - start) % len + len) % len; },
-    set currentTime(v) {},   // every play starts from the top
-    play() {
-      if (audio.paused && actx) {
-        if (!gain) { gain = actx.createGain(); gain.connect(master); }
-        gain.gain.value = vol * level;
-        audio.paused = false; start = next = actx.currentTime + 0.05; idx = 0;
-        timer = setInterval(() => {
-          while (next < actx.currentTime + 0.12) { play(idx % steps, next, gain); idx++; next += step; }
-        }, 25);
-      }
-      return Promise.resolve();
-    },
-    pause() { audio.paused = true; clearInterval(timer); },
-  };
-  return { audio, beats, steps, step, play, level };
-}
-// instruments for the idle songs, scheduled at an absolute time t
-const at = t => Math.max(0, t - actx.currentTime);
-const note = (root, semis) => root * 2 ** (semis / 12);
-const kick = (t, out, v = 0.55) => tone('sine', 170, 45, 0.16, v, at(t), out);
-const clap = (t, out, v = 0.3) => { noiseHit(0.1, v, 1400, at(t), 'bandpass', out); noiseHit(0.12, v * 0.8, 1300, at(t + 0.012), 'bandpass', out); };
-const hat = (t, out, v = 0.05) => noiseHit(0.03, v, 7500, at(t), 'highpass', out);
-// 808-style sub: a sine that drops into the note, plus an octave-up triangle so the
-// bass still comes through on laptop and phone speakers
-function sub(f, t, dur, v, out) {
-  const s = actx.createOscillator(), g = actx.createGain(), T = t;
-  s.type = 'sine'; s.frequency.setValueAtTime(f * 1.5, T); s.frequency.exponentialRampToValueAtTime(f, T + 0.04);
-  g.gain.setValueAtTime(0.0001, T); g.gain.exponentialRampToValueAtTime(v, T + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, T + dur);
-  s.connect(g).connect(out); s.start(T); s.stop(T + dur + 0.02);
-  tone('triangle', f * 2, f * 2, dur * 0.8, v * 0.35, at(t), out);
-}
-// pitched cowbell: two detuned squares through a bandpass, short and clanky
-function bell(f, t, v, out) {
-  const bp = actx.createBiquadFilter(), g = actx.createGain();
-  bp.type = 'bandpass'; bp.frequency.value = f * 1.3; bp.Q.value = 1.4;
-  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(v, t + 0.004); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.28);
-  for (const m of [1, 1.48]) {
-    const o = actx.createOscillator(); o.type = 'square'; o.frequency.value = f * m;
-    o.connect(bp); o.start(t); o.stop(t + 0.3);
+// ---------- AFK: stand still long enough and you fall asleep ----------
+const SLEEP_AFTER = 20;   // seconds without any input
+let lastInput = performance.now(), asleep = false, snoreT = 0;
+for (const ev of ['keydown', 'pointerdown', 'touchstart', 'touchmove', 'wheel', 'mousemove'])
+  addEventListener(ev, () => { lastInput = performance.now(); }, { passive: true });
+const snore = () => { if (soundOn && actx) { noiseHit(1.1, 0.12, 260); tone('sine', 95, 70, 0.9, 0.06); } };
+// floating "Z"s rise from your head while you sleep
+const zzz = [];
+function updateZzz(dt) {
+  if (asleep && !zzz.length) for (let i = 0; i < 3; i++) {
+    const z = labelSprite('Z', '#ffffff', 'rgba(0,0,0,0)', 0.9);
+    z.userData.t = i / 3; scene.add(z); zzz.push(z);
   }
-  bp.connect(g).connect(out);
-}
-
-// Blocky: chill chiptune funk, 126 BPM in A minor, Am - F - C - G two bars each
-const BLOCKY_CHORDS = [[0, 'm'], [-4, 'M'], [-9, 'M'], [-2, 'M']];   // semitones from A2
-const BLOCKY_BASS = [0, null, 12, null, null, 0, null, 12, null, 0, null, 7, 12, null, 7, null];
-const BLOCKY_ARP = [0, null, 1, 2, null, 3, 2, null, 1, null, 2, 3, null, 2, 1, null];
-const blockySong = synthSong({
-  bpm: 126, steps: 128, level: 2.6,
-  accent: b => [1, 0.6, 0.85, 0.6][b % 4],
-  play(i, t, out) {
-    const bar = i >> 4, s = i % 16, [root, q] = BLOCKY_CHORDS[bar >> 1];
-    if (s === 0 || s === 8 || (s === 6 && bar % 2)) kick(t, out, s === 6 ? 0.35 : 0.5);
-    if (s === 4 || s === 12) clap(t, out, 0.22);
-    if (s % 2 === 0) hat(t, out, s % 4 === 2 ? 0.06 : 0.03);
-    const bs = BLOCKY_BASS[s];
-    if (bs !== null) { const f = note(110, root + bs); tone('square', f, f, 0.16, 0.05, at(t), out); }
-    // chord-tone arpeggio lead; the last bar climbs an octave into the loop
-    const ai = BLOCKY_ARP[s];
-    if (ai !== null) {
-      const tones = q === 'm' ? [0, 3, 7, 12] : [0, 4, 7, 12];
-      const f = note(440, root + tones[ai] + (bar === 7 && s > 7 ? 12 : 0));
-      tone('square', f, f * 0.995, 0.13, 0.025, at(t), out);
-    }
-    // soft offbeat chord stabs
-    if (s % 4 === 2) for (const n of (q === 'm' ? [3, 7] : [4, 7])) { const f = note(220, root + n); tone('triangle', f, f, 0.1, 0.03, at(t), out); }
-  },
-});
-
-// Paper Cutout: bouncy bass-boosted cartoon phonk, 136 BPM in G# minor. A deep 808 hits on
-// every beat and a higher bass note bounces in between, with cowbell and a cartoon boing
-const PAPER_ROOTS = [0, -4, 5, 7];                   // G#m - E - C#m - D#, semitones from G#1
-const PAPER_BOUNCE = [12, 15, 19, 22];               // off-beat bass notes above the root
-const PAPER_BELL = [[0, 7], [3, 10], [6, 12], [8, 15], [11, 10], [14, 7]];   // [step, semis above G#4]
-const paperSong = synthSong({
-  bpm: 136, steps: 128, level: 1.9,
-  accent: b => b % 16 === 15 ? 1 : [1, 0.75, 0.9, 0.75][b % 4],
-  play(i, t, out) {
-    const bar = i >> 4, s = i % 16, root = PAPER_ROOTS[bar >> 1], G = 51.91;
-    if (s % 4 === 0) { kick(t, out, 0.45); sub(note(G, root), t, 0.3, 0.55, out); }
-    if (s % 4 === 2) sub(note(G, root + PAPER_BOUNCE[(s >> 2) % 4]), t, 0.16, 0.4, out);
-    if (s === 4 || s === 12) clap(t, out, 0.3);
-    // 16th hats, rolling into the loop on the last half bar
-    hat(t, out, s % 2 ? 0.025 : 0.05);
-    if (bar === 7 && s >= 12) hat(t + 60 / 136 / 8, out, 0.04);
-    for (const [bs, n] of PAPER_BELL) if (bs === s && bar % 4 !== 3) bell(note(415.3, n + (bar % 2 ? -2 : 0)), t, 0.05, out);
-    // goofy boing to close every four bars
-    if (bar % 4 === 3 && s === 12) tone('triangle', 180, 620, 0.3, 0.12, at(t), out);
-  },
-});
-
-// one song per character style
-const IDLE_SONGS = { roblox: blockySong, southpark: paperSong };
-let idle = IDLE_SONGS[myStyle];
-function setIdleSong(style) {
-  const next = IDLE_SONGS[style];
-  if (next === idle) return;
-  // hand over mid-song at the same loudness, starting the new one from the top
-  next.audio.volume = idle.audio.volume;
-  if (!idle.audio.paused) { idle.audio.pause(); next.audio.play(); }
-  idle.audio.volume = 0;
-  idle = next;
-}
-let stillTime = 0;
-function updateIdleSong(dt, still) {
-  stillTime = still ? stillTime + dt : 0;
-  // actx only exists after a user gesture, which browsers require before playing audio
-  const want = soundOn && !!actx && stillTime > 0.4;
-  if (want && idle.audio.paused) idle.audio.play().catch(() => {});
-  // fade in gently, fade out fast
-  const target = want ? IDLE_VOL : 0, rate = want ? 1.5 : 6;
-  idle.audio.volume = Math.min(1, Math.max(0, idle.audio.volume + Math.max(-rate * dt, Math.min(rate * dt, target - idle.audio.volume))));
-  if (!want && idle.audio.volume === 0 && !idle.audio.paused) idle.audio.pause();
-  // duck the beat underneath the song
-  if (musicGain) musicGain.gain.value = 0.55 * settings.music * (1 - idle.audio.volume / IDLE_VOL);
+  if (!asleep) { for (const z of zzz.splice(0)) { scene.remove(z); z.material.map.dispose(); z.material.dispose(); } return; }
+  for (const z of zzz) {
+    const k = (z.userData.t = (z.userData.t + dt / 3) % 1);
+    z.position.set(pl.x + 0.8 + k * 1.5 + Math.sin(k * 9) * 0.3, pl.y - 0.8 + k * 3.5, pl.z);
+    z.scale.set(0.5 + k * 0.9, 0.5 + k * 0.9, 1);
+    z.material.opacity = Math.min(1, (1 - k) * 2.5);
+  }
 }
 
 // ---------- Meme popups ----------
@@ -1827,6 +1717,7 @@ $('shopBtn').onclick = e => { renderShop(); $('shop').classList.add('open'); doc
 // settings: sliders and checkboxes write straight into settings and are saved
 function applySettings() {
   if (master) master.gain.value = masterLevel();
+  if (musicGain) musicGain.gain.value = 0.55 * settings.music;
   sun.castShadow = settings.shadows;
   store.set('obbySettings', settings);
 }
@@ -1877,7 +1768,6 @@ $('styleSel').onchange = e => {
   myStyle = e.target.value;
   buildBody(character, mats, myStyle);
   buildBody(ghost.char, ghostMats, myStyle); ghost.char.traverse(o => { o.castShadow = false; });
-  setIdleSong(myStyle);
   try { localStorage.setItem('obbyStyle', myStyle); } catch (err) {}
   mpHello();
   burst(pl.x, pl.y, pl.z, 30, 10, null, 0.8, 0.5, 10);
@@ -2423,19 +2313,20 @@ function frame(now) {
     if (pose.sq) sqTarget = pose.sq;
     fx.idleT = 0;
     if (emote.def.dur && emote.t > emote.def.dur) emote = null;
+  } else if (pl.grounded && (now - lastInput) / 1000 > SLEEP_AFTER) {
+    // AFK: flop onto your back and snore, chest rising and falling
+    if (!asleep) { asleep = true; snoreT = 1.5; fx.sq.v -= 8; flashText('💤 AFK'); }
+    const breath = Math.sin(t * 1.6);
+    pose.pitch = -1.5; pose.hop = -1.75; sqTarget = 1 + breath * 0.05;
+    pose.armLx = 0.1; pose.armRx = -0.2; pose.armLz = -0.5; pose.armRz = 0.35;
+    pose.legL = 0.1; pose.legR = -0.15; pose.headZ = 0.35 + breath * 0.05; pose.headX = -0.1;
+    fx.idleT = 0;
+    if ((snoreT -= dt) <= 0) { snoreT = 3.2; snore(); }
   } else if (pl.grounded) {
-    // tweenslop snap dance: on every beat of the idle song (or the music beat before it
-    // kicks in) it snaps between a squashed, tilted splat and a tall skinny stretch,
-    // the head popping bigger in place; louder hits snap harder and may throw a flip
+    // tweenslop snap dance: on every beat of the music it snaps between a squashed,
+    // tilted splat and a tall skinny stretch, the head popping bigger in place
     snappy = true;
-    let hb = Math.floor(beat), hit = 1;
-    if (!idle.audio.paused && idle.audio.volume > 0) {
-      // last beat that has played; before the first one we're still on the previous loop's last
-      const b = idle.beats, ct = idle.audio.currentTime;
-      let i = ct < b[0] ? b.length - 2 : 0;
-      while (ct >= b[0] && i + 2 < b.length && b[i + 2] <= ct) i += 2;
-      hb = i / 2; hit = b[i + 1];
-    }
+    const hb = Math.floor(beat), hit = 1;
     const side = (hb >> 1) % 2 ? 1 : -1, splat = hb % 2 === 0;
     // South Park style stays upright so its face keeps looking out, not down at the floor
     const upright = u.style === 'southpark';
@@ -2476,7 +2367,8 @@ function frame(now) {
     sqTarget = 1.1;
   }
 
-  updateIdleSong(dt, pl.grounded && !moving);
+  if (asleep && (now - lastInput) / 1000 <= SLEEP_AFTER) { asleep = false; fx.sq.v += 10; fx.pop.v += 20; }
+  updateZzz(dt);
 
   const k = 1 - Math.exp(-dt * (snappy ? 30 : 16)), L =(o, key, v) => { o[key] += (v - o[key]) * k; };
   const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));

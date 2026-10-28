@@ -21,7 +21,8 @@ A Minecraft-style obby (obstacle course) generator that runs in your browser —
 - **Emotes** — dance, wave, dab, floss, sit, cheer, breakdance, laugh, play dead… or explode 💥.
 - **Multiplayer** — everyone on the same course plays together, with name tags and chat. Press **🏁 Race** for a countdown race where everyone restarts together and finishers are ranked 🥇🥈🥉.
 - **Settings** — volume, music, look sensitivity, field of view, and toggles for shadows, screen shake, meme popups, speed lines and the ghost.
-- **Music and sound effects**, all made in code with the Web Audio API, including a song that plays when you stand still (each character style has its own, and your character dances to its beat).
+- **Music and sound effects**, all made in code with the Web Audio API. Stand still and your character dances to the beat.
+- **AFK sleeping** — leave the game alone for 20 seconds and your character lies down on the floor and snores 💤. Press any key to wake up.
 
 ## Controls
 
