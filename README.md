@@ -11,10 +11,11 @@ A Minecraft-style obby (obstacle course) generator that runs in your browser —
 - **Minecraft look** — pixel textures for grass, dirt, sand, snow, stone, bricks, planks, gold, emerald and diamond, plus blocky clouds.
 - **Double jump** — press jump again in the air.
 - **Skins** — 8 characters, or make your own with custom colors, trails and neon glow.
+- **Two art styles** — switch between blocky Roblox-style and a round paper-cutout South Park style in the menu. Your skin colors work with both, and other players see the style you picked.
 - **Tweenslop animation** — squash and stretch, flips, bobble head, screen shake and meme popups.
 - **Emotes** — dance, wave, dab, floss, sit, cheer, breakdance, laugh, play dead… or explode 💥.
 - **Multiplayer** — everyone on the same course plays together, with name tags and chat.
-- **Music and sound effects**, with a song that plays when you stand still.
+- **Music and sound effects**, with a song that plays when you stand still (the South Park style has its own song).
 
 ## Controls
 

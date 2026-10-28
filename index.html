@@ -95,6 +95,8 @@
   </select>
   <label for="skin">Character</label>
   <select id="skin"></select>
+  <label for="styleSel">Style</label>
+  <select id="styleSel"></select>
   <details id="custom">
     <summary>🎨 Customize colors</summary>
     <div class="swatches">
@@ -613,6 +615,7 @@ const SKINS = {
   ocean:   { name: 'Ocean Wave', skin: 0xbfe9ff, torso: 0x0077b6, legs: 0x023e8a, cape: 0x00b4d8, hat: 0xffffff, glow: 0.2, trail: 'cape' },
   candy:   { name: 'Cotton Candy', skin: 0xffe5ec, torso: 0xff8fab, legs: 0xa2d2ff, cape: 0xcdb4db, hat: 0xffc8dd, glow: 0, trail: 'rainbow' },
   toxic:   { name: 'Toxic', skin: 0x9ef01a, torso: 0x1b1b1b, legs: 0x38b000, cape: 0x70e000, hat: 0x1b1b1b, glow: 0.6, trail: 'cape' },
+  bigboned: { name: 'Big Boned', skin: 0xf6d2ae, torso: 0xd7262e, legs: 0x7b4a24, cape: 0xf3c70f, hat: 0x17b3ae, glow: 0, trail: 'cape' },
 };
 let customSkin = null;
 try { customSkin = JSON.parse(localStorage.getItem('obbyCustomSkin')); } catch (e) {}
@@ -654,6 +657,11 @@ const makeMats = () => ({
   hat: phong({ map: fabricTex }),
   shades: new THREE.MeshPhongMaterial({ color: 0x0a0a0a, specular: 0xffffff, shininess: 120 }),
   shine: new THREE.MeshBasicMaterial({ color: 0xffffff }),
+  // South Park style: flat unlit paper colours, paper-white eyes and a black ink outline
+  flat: Object.fromEntries(['skin', 'torso', 'legs', 'cape', 'hat'].map(k => [k, new THREE.MeshBasicMaterial()])),
+  eye: new THREE.MeshBasicMaterial({ color: 0xffffff }),
+  ink: new THREE.MeshBasicMaterial({ color: 0x111111 }),
+  outline: new THREE.MeshBasicMaterial({ color: 0x111111, side: THREE.BackSide }),
 });
 const mats = makeMats();
 let currentSkin = SKINS.classic;
@@ -662,22 +670,39 @@ function applySkin(s) {
   paintMats(mats, s);
 }
 function paintMats(mats, s) {
-  mats.skin.color.set(s.skin); mats.face.color.set(s.skin);
+  mats.skin.color.set(s.skin); mats.face.color.set(s.skin); mats.flat.skin.color.set(s.skin);
   for (const k of ['torso', 'legs', 'cape', 'hat']) {
     mats[k].color.set(s[k]);
     mats[k].emissive.set(s[k]).multiplyScalar(s.glow);
+    mats.flat[k].color.copy(mats[k].color);
   }
   mats.torsoFront.color.copy(mats.torso.color); mats.torsoFront.emissive.copy(mats.torso.emissive);
 }
 
-function makeCharacter(mats) {
-  const root = new THREE.Group(), body = new THREE.Group();
+// STYLES: how a character is built. Every style has the same joints (body, head, limbs,
+// two-piece cape) at the same height, so animation, emotes and multiplayer work unchanged.
+const STYLES = { roblox: '🧱 Roblox', southpark: '✂️ South Park' };
+const cleanStyle = st => Object.hasOwn(STYLES, st) ? st : 'roblox';
+function makeCharacter(mats, style = 'roblox') {
+  const root = new THREE.Group();
+  buildBody(root, mats, style);
+  return root;
+}
+// (re)builds the body under root, keeping anything else attached to it (name tag, chat bubble)
+function buildBody(root, mats, style) {
+  const old = root.userData.body;
+  if (old) { root.remove(old); old.traverse(o => { if (o.geometry && !SHARED_GEO.includes(o.geometry)) o.geometry.dispose(); }); }
+  const body = new THREE.Group();
   root.add(body);
+  const pivot = (x, y, z, parent = body) => { const p = new THREE.Group(); p.position.set(x, y, z); parent.add(p); return p; };
+  const joints = style === 'southpark' ? southParkRig(body, mats, pivot) : robloxRig(body, mats, pivot);
+  Object.assign(root.userData, { body, style, ...joints });
+}
+function robloxRig(body, mats, pivot) {
   const mk = (sx, sy, sz, mat, x, y, z = 0, parent = body) => {
     const m = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), mat);
     m.position.set(x, y, z); m.castShadow = true; parent.add(m); return m;
   };
-  const pivot = (x, y, z, parent = body) => { const p = new THREE.Group(); p.position.set(x, y, z); parent.add(p); return p; };
   const T = mats.torso;
   mk(2, 2, 1, [T, T, T, T, mats.torsoFront, T], 0, 0.5);
   const S = mats.skin;
@@ -699,10 +724,80 @@ function makeCharacter(mats) {
   mk(1.8, 1.4, 0.08, mats.cape, 0, -0.7, 0, capeTop);
   const capeLow = pivot(0, -1.4, 0, capeTop);
   mk(1.8, 1.3, 0.08, mats.cape, 0, -0.65, 0, capeLow);
-  root.userData = { body, head, legL, legR, armL, armR, capeTop, capeLow };
-  return root;
+  return { head, legL, legR, armL, armR, capeTop, capeLow };
 }
-const character = makeCharacter(mats);
+// paper-cutout cartoon kid, built big-boned: a huge wide head in front of a round coat,
+// flat unlit colours and a black ink outline like the show's construction-paper look.
+// Hat colour is the beanie; cape colour is the band, pom-pom and mittens (no cape here)
+function southParkRig(body, mats, pivot) {
+  const F = mats.flat;
+  const mk = (mat, x, y, z, parent, scale, ink = 0, geo = ball) => {
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(x, y, z); m.scale.set(...scale);
+    m.castShadow = true; parent.add(m);
+    if (ink) { const o = new THREE.Mesh(geo, mats.outline); o.scale.setScalar(1 + ink); m.add(o); }
+    return m;
+  };
+  // z of the front surface of an ellipsoid { c: [x, y, z], r: [rx, ry, rz] } at (x, y)
+  const surf = (e, x, y) => e.c[2] + e.r[2] * Math.sqrt(Math.max(0, 1 - ((x - e.c[0]) / e.r[0]) ** 2 - ((y - e.c[1]) / e.r[1]) ** 2));
+  // an ink line drawn along the front of an ellipsoid through 2D points
+  const line = (e, pts, parent, w = 0.035) => {
+    const curve = new THREE.CatmullRomCurve3(pts.map(([x, y]) => new THREE.Vector3(x, y, surf(e, x, y) + 0.01)));
+    parent.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 24, w, 6), mats.ink));
+  };
+  // round coat, bulging at the bottom, sitting a little behind the head
+  const coat = { c: [0, -1.25, -0.2], r: [1.95, 1.2, 1.3] }, belly = { c: [0, -1.7, -0.15], r: [2.15, 0.62, 1.3] };
+  mk(F.torso, ...coat.c, body, coat.r, 0.025);
+  mk(F.torso, ...belly.c, body, belly.r, 0.025);
+  const coatZ = (x, y) => Math.max(surf(coat, x, y), surf(belly, x, y));
+  const front = new THREE.CatmullRomCurve3([-0.9, -1.3, -1.7, -2.1].map(y => new THREE.Vector3(0.12, y, coatZ(0.12, y) + 0.01)));
+  body.add(new THREE.Mesh(new THREE.TubeGeometry(front, 16, 0.03, 6), mats.ink));
+  for (const y of [-1.15, -1.55, -1.95]) mk(mats.ink, 0.42, y, coatZ(0.42, y), body, [0.08, 0.08, 0.04]);
+  // huge wide head on a low neck pivot so it can bobble
+  const head = pivot(0, -0.4, 0);
+  const face = { c: [0, 1.05, 0.3], r: [2, 1.45, 1.8] };
+  mk(F.skin, ...face.c, head, face.r, 0.02);
+  for (const [ex, px] of [[-0.46, -0.2], [0.46, 0.44]]) {
+    const ez = surf(face, ex, 1.0);
+    mk(mats.eye, ex, 1.0, ez - 0.06, head, [0.46, 0.37, 0.12], 0.04);
+    mk(mats.ink, px, 1.0, ez + 0.06, head, [0.065, 0.065, 0.03]);
+  }
+  line(face, [[-0.28, 0.36], [0, 0.42], [0.22, 0.36]], head, 0.03);               // little frown
+  line(face, [[-1.6, 0.6], [-0.9, 0.3], [0, 0.17], [0.9, 0.3], [1.6, 0.6]], head); // chin crease
+  // beanie: dome in the hat colour, thin band and wavy pom-pom tuft in the cape colour
+  mk(F.hat, 0, 1.35, 0.3, head, [2.06, 1.25, 1.86], 0.02, dome);
+  mk(F.cape, 0, 1.38, 0.3, head, [2.09, 0.18, 1.89], 0.02, band);
+  for (const [x, y, sx] of [[-0.4, 2.58, 0.42], [0, 2.68, 0.36], [0.38, 2.6, 0.4]]) mk(F.cape, x, y, 0.3, head, [sx, 0.2, 0.34], 0.06);
+  // stubby sleeves ending in big mittens with a thumb
+  const arm = sx => {
+    const p = pivot(sx * 1.75, -0.55, 0.1);
+    mk(F.torso, 0, -0.2, 0, p, [0.4, 0.45, 0.4]);
+    mk(F.cape, sx * 0.15, -0.62, 0.05, p, [0.5, 0.38, 0.28], 0.05);
+    mk(F.cape, -sx * 0.25, -0.42, 0.12, p, [0.2, 0.2, 0.18], 0.05);
+    return p;
+  };
+  const armL = arm(-1), armR = arm(1);
+  // wide brown trouser legs and flat black shoes; soles land on the Roblox rig's floor
+  const leg = sx => {
+    const p = pivot(sx * 0.85, -1.95, -0.1);
+    mk(F.legs, 0, -0.15, 0, p, [0.9, 0.3, 1.0], 0.03);
+    mk(mats.ink, 0, -0.42, 0.1, p, [0.85, 0.12, 1.0]);
+    return p;
+  };
+  const legL = leg(-1), legR = leg(1);
+  // cape joints stay so the animation and multiplayer state line up, but carry nothing
+  const capeTop = pivot(0, 0.1, -1.2);
+  const capeLow = pivot(0, -1.0, 0, capeTop);
+  return { head, legL, legR, armL, armR, capeTop, capeLow };
+}
+// shared unit shapes for the South Park rig (scaled per part)
+const ball = new THREE.SphereGeometry(1, 32, 20);
+const dome = new THREE.SphereGeometry(1, 32, 12, 0, Math.PI * 2, 0, Math.PI / 2);
+const band = new THREE.CylinderGeometry(1, 1, 1, 32);
+const SHARED_GEO = [ball, dome, band];
+let myStyle = 'roblox';
+try { myStyle = cleanStyle(localStorage.getItem('obbyStyle')); } catch (e) {}
+const character = makeCharacter(mats, myStyle);
 scene.add(character);
 let savedSkin = 'classic';
 try { savedSkin = localStorage.getItem('obbySkin') || 'classic'; } catch (e) {}
@@ -753,6 +848,8 @@ function updateParticles(dt) {
 const fx = {
   flip: -1, flipAxis: 'x', trailT: 0, shake: 0, fovKick: 0, stepSign: 0, idleT: 0,
   sq: { x: 1, v: 0 }, p: { hop: 0, bodyY: 0, bodyZ: 0, lean: 0, pitch: 0 },
+  tilt: { x: 0, v: 0 }, snapBeat: -1, snapHit: 1,   // tilt: springy side lean; snapBeat/snapHit: last beat snapped on and how hard it hit
+  pop: { x: 0, v: 0 },                  // head pop: extra head size, kicked on every dance snap
 };
 function trick() { fx.flip = 0; fx.flipAxis = Math.random() < 0.5 ? 'x' : 'y'; }
 
@@ -854,20 +951,35 @@ function setMusic(on) {
 
 // ---------- Idle song: plays while standing still ----------
 const IDLE_VOL = 0.8;
-const idleSong = new Audio('idle.mp3');
-idleSong.loop = true; idleSong.preload = 'auto'; idleSong.volume = 0;
+// one song per character style. beats: [time, strength, ...] of every beat, tracked from
+// the audio itself so the idle dance snaps exactly on the hits (strength 1 = a full hit)
+const IDLE_SONGS = {
+  roblox: { audio: new Audio('idle.mp3'), beats: [0.404, 0.58, 0.848, 0.99, 1.292, 1.00, 1.736, 0.94, 2.185, 0.64, 2.624, 0.95, 3.068, 0.98, 3.517, 1.00, 3.961, 0.66, 4.405, 1.00, 4.849, 0.97, 5.293, 0.99, 5.737, 0.56, 6.181, 1.00, 6.625, 1.00, 7.079, 0.30, 7.518, 0.63, 7.957, 0.90, 8.401, 0.96, 8.845, 0.99, 9.294, 0.62, 9.738, 1.00, 10.177, 0.98, 10.626, 0.99, 11.070, 0.56, 11.514, 1.00, 11.958, 0.95, 12.402, 1.00, 12.851, 0.64, 13.295, 1.00] },
+  southpark: { audio: new Audio('idle-southpark.mp3'), beats: [0.075, 1.00, 0.574, 0.41, 1.008, 0.30, 1.407, 0.42, 1.846, 0.49, 2.290, 0.65, 2.729, 0.61, 3.173, 0.74, 3.612, 0.92, 4.056, 0.80, 4.495, 1.00, 4.934, 0.85, 5.378, 0.85, 5.817, 0.86, 6.261, 0.95, 6.700, 0.93, 7.144, 1.00, 7.583, 1.00, 8.022, 1.00, 8.466, 1.00, 8.905, 0.77, 9.349, 0.93, 9.788, 0.98, 10.232, 1.00, 10.671, 0.91, 11.115, 0.89, 11.554, 1.00, 11.993, 0.95, 12.437, 0.86, 12.876, 1.00, 13.320, 1.00, 13.759, 0.95] },
+};
+for (const { audio } of Object.values(IDLE_SONGS)) Object.assign(audio, { loop: true, preload: 'auto', volume: 0 });
+let idle = IDLE_SONGS[myStyle];
+function setIdleSong(style) {
+  const next = IDLE_SONGS[style];
+  if (next === idle) return;
+  // hand over mid-song at the same loudness, starting the new one from the top
+  next.audio.volume = idle.audio.volume; next.audio.currentTime = 0;
+  if (!idle.audio.paused) { idle.audio.pause(); next.audio.play().catch(() => {}); }
+  idle.audio.volume = 0;
+  idle = next;
+}
 let stillTime = 0;
 function updateIdleSong(dt, still) {
   stillTime = still ? stillTime + dt : 0;
   // actx only exists after a user gesture, which browsers require before playing audio
   const want = soundOn && !!actx && stillTime > 0.4;
-  if (want && idleSong.paused) idleSong.play().catch(() => {});
+  if (want && idle.audio.paused) idle.audio.play().catch(() => {});
   // fade in gently, fade out fast
   const target = want ? IDLE_VOL : 0, rate = want ? 1.5 : 6;
-  idleSong.volume = Math.min(1, Math.max(0, idleSong.volume + Math.max(-rate * dt, Math.min(rate * dt, target - idleSong.volume))));
-  if (!want && idleSong.volume === 0 && !idleSong.paused) idleSong.pause();
+  idle.audio.volume = Math.min(1, Math.max(0, idle.audio.volume + Math.max(-rate * dt, Math.min(rate * dt, target - idle.audio.volume))));
+  if (!want && idle.audio.volume === 0 && !idle.audio.paused) idle.audio.pause();
   // duck the beat underneath the song
-  if (musicGain) musicGain.gain.value = 0.55 * (1 - idleSong.volume / IDLE_VOL);
+  if (musicGain) musicGain.gain.value = 0.55 * (1 - idle.audio.volume / IDLE_VOL);
 }
 
 // ---------- Meme popups ----------
@@ -1215,6 +1327,17 @@ function addCustomOption() {
   if (!$('skin').querySelector('option[value=custom]')) $('skin').add(new Option('✏️ Custom', 'custom'));
 }
 for (const [k, s] of Object.entries(SKINS)) $('skin').add(new Option(s.name, k));
+for (const [k, name] of Object.entries(STYLES)) $('styleSel').add(new Option(name, k));
+$('styleSel').value = myStyle;
+$('styleSel').onchange = e => {
+  myStyle = e.target.value;
+  buildBody(character, mats, myStyle);
+  setIdleSong(myStyle);
+  try { localStorage.setItem('obbyStyle', myStyle); } catch (err) {}
+  mpHello();
+  burst(pl.x, pl.y, pl.z, 30, 10, null, 0.8, 0.5, 10);
+  e.target.blur();
+};
 if (customSkin) addCustomOption();
 $('skin').value = savedSkin;
 syncPickers();
@@ -1302,7 +1425,7 @@ function cleanSkin(s) {
   for (const k of PARTS) out[k] = Number.isInteger(s?.[k]) ? s[k] & 0xffffff : 0x888888;
   return out;
 }
-const hello = () => ({ name: myName, skin: cleanSkin(currentSkin) });
+const hello = () => ({ name: myName, skin: cleanSkin(currentSkin), style: myStyle });
 
 // pixel-font label with a dark Minecraft-style nameplate
 function labelSprite(text, color, bg, h = 1) {
@@ -1407,6 +1530,8 @@ async function mpJoin(course) {
       p.name = name; setTag(p.char, name);
     }
     p.skin = cleanSkin(d?.skin); paintMats(p.mats, p.skin);
+    const style = cleanStyle(d?.style);
+    if (style !== p.char.userData.style) buildBody(p.char, p.mats, style);
     onlineText();
   };
   mp.st.onMessage = (d, { peerId }) => {
@@ -1470,12 +1595,18 @@ function removePeer(id) {
   for (const m of Object.values(p.mats)) m.dispose();
 }
 
+// head size; on the South Park rig the head undoes the body's squash so it stays round
+function setHeadScale(u, s, sxz, sy) {
+  u.headS = s;
+  if (u.style === 'southpark') u.head.scale.set(s / sxz, s / sy, s / sxz);
+  else u.head.scale.setScalar(s);
+}
 // pose snapshot: position, facing, then every joint the animation system moves
 const ST_LEN = 22, ANGLES = [3, 4, 5, 6, 10, 11, 13, 14, 15, 16, 17, 18, 19, 20];
 function packState() {
   const u = character.userData, b = u.body;
   return [pl.x, pl.y, pl.z, character.rotation.y, b.rotation.x, b.rotation.y, b.rotation.z,
-    b.scale.x, b.scale.y, b.position.y, u.head.rotation.x, u.head.rotation.z, u.head.scale.x,
+    b.scale.x, b.scale.y, b.position.y, u.head.rotation.x, u.head.rotation.z, u.headS ?? 1,
     u.legL.rotation.x, u.legR.rotation.x, u.armL.rotation.x, u.armL.rotation.z, u.armR.rotation.x, u.armR.rotation.z,
     u.capeTop.rotation.x, u.capeLow.rotation.x, cpIndex]
     .map((v, i) => Math.round((ANGLES.includes(i) ? wrapA(v) : v) * 1000) / 1000);
@@ -1486,7 +1617,7 @@ function applyState(char, s) {
   char.position.set(s[0], s[1], s[2]); char.rotation.y = s[3];
   b.rotation.set(s[4], s[5], s[6]);
   b.scale.set(s[7], s[8], s[7]); b.position.y = s[9];
-  u.head.rotation.x = s[10]; u.head.rotation.z = s[11]; u.head.scale.setScalar(s[12]);
+  u.head.rotation.x = s[10]; u.head.rotation.z = s[11]; setHeadScale(u, s[12], s[7], s[8]);
   u.legL.rotation.x = s[13]; u.legR.rotation.x = s[14];
   u.armL.rotation.x = s[15]; u.armL.rotation.z = s[16];
   u.armR.rotation.x = s[17]; u.armR.rotation.z = s[18];
@@ -1541,8 +1672,8 @@ function frame(now) {
   // ---- tweenslop animation: springy squash/stretch, bobble head, flailing limbs ----
   const u = character.userData, t = now / 1000;
   const speedK = Math.hypot(pl.vx, pl.vz) / SPEED, moving = speedK > 0.06;
-  const pose = { legL: 0, legR: 0, armLx: 0, armRx: 0, armLz: 0, armRz: 0, headX: 0, headZ: 0, hop: 0, bodyY: 0, bodyZ: 0, lean: 0, pitch: 0, sq: 0, spin: 0 };
-  let sqTarget = 1, windmill = false;
+  const pose = { legL: 0, legR: 0, armLx: 0, armRx: 0, armLz: 0, armRz: 0, headX: 0, headZ: 0, hop: 0, bodyY: 0, bodyZ: 0, lean: 0, pitch: 0, sq: 0, spin: 0, tilt: 0 };
+  let sqTarget = 1, windmill = false, snappy = false;
   // beat clock: locked to the music when it's on, otherwise 120 BPM
   const beat = musicOn ? (actx.currentTime - musicStart) * BPM / 60 : t * 2;
   if (emote && (!pl.grounded || moving)) emote = null;
@@ -1557,7 +1688,8 @@ function frame(now) {
     pose.hop = a * 0.9; pose.bodyY = s * 0.35; pose.bodyZ = Math.cos(walkPhase) * 0.15; pose.lean = 0.25;
     pose.headZ = Math.sin(walkPhase * 2) * 0.25; pose.headX = -a * 0.2;
     const sign = Math.sign(s);
-    if (sign !== fx.stepSign) { fx.stepSign = sign; fx.sq.v -= 2.5; }
+    if (sign !== fx.stepSign) { fx.stepSign = sign; fx.sq.v -= 4; fx.tilt.v += sign * 5; }
+    pose.tilt = sign * 0.15;
   } else if (pl.grounded && emote) {
     emote.t += dt;
     emote.def.pose(emote.t, pose, beat);
@@ -1565,14 +1697,40 @@ function frame(now) {
     fx.idleT = 0;
     if (emote.def.dur && emote.t > emote.def.dur) emote = null;
   } else if (pl.grounded) {
-    // idle groove, locked to the beat when the music is on
-    const b = beat * Math.PI, bounce = Math.abs(Math.cos(b));
-    pose.hop = bounce * 0.4; sqTarget = 1 - (1 - bounce) * 0.1;
-    pose.bodyZ = Math.sin(b / 2) * 0.18; pose.bodyY = Math.sin(b / 4) * 0.3;
-    pose.headX = Math.sin(b) * 0.25; pose.headZ = -Math.sin(b / 2) * 0.3;
-    pose.armLx = -2.4 + Math.sin(b) * 0.7; pose.armRx = -2.4 - Math.sin(b) * 0.7;
-    pose.armLz = -0.3; pose.armRz = 0.3;
-    pose.legL = Math.sin(b / 2) * 0.25; pose.legR = -pose.legL;
+    // tweenslop snap dance: on every beat of the idle song (or the music beat before it
+    // kicks in) it snaps between a squashed, tilted splat and a tall skinny stretch,
+    // the head popping bigger in place; louder hits snap harder and may throw a flip
+    snappy = true;
+    let hb = Math.floor(beat), hit = 1;
+    if (!idle.audio.paused && idle.audio.volume > 0) {
+      // last beat that has played; before the first one we're still on the previous loop's last
+      const b = idle.beats, ct = idle.audio.currentTime;
+      let i = ct < b[0] ? b.length - 2 : 0;
+      while (ct >= b[0] && i + 2 < b.length && b[i + 2] <= ct) i += 2;
+      hb = i / 2; hit = b[i + 1];
+    }
+    const side = (hb >> 1) % 2 ? 1 : -1, splat = hb % 2 === 0;
+    // South Park style stays upright so its face keeps looking out, not down at the floor
+    const upright = u.style === 'southpark';
+    if (hb !== fx.snapBeat) {
+      fx.snapBeat = hb; fx.snapHit = hit;
+      const k = 0.5 + hit * 0.6;
+      fx.sq.v += (splat ? -9 : 6) * k;
+      fx.tilt.v += (splat ? side * 7 : -side * 4) * k;
+      fx.pop.v += 22 * k;
+      if (fx.flip < 0 && hit > 0.9 && Math.random() < 0.15) trick();
+    }
+    const amt = 0.5 + fx.snapHit * 0.5;
+    if (splat) {
+      sqTarget = 1 - 0.4 * amt; pose.tilt = side * 0.5 * amt; pose.pitch = upright ? 0 : 0.15;
+      pose.armLx = 0.3; pose.armRx = 0.3; pose.armLz = -1.5; pose.armRz = 1.5;
+      pose.legL = -0.7; pose.legR = 0.7;
+      pose.headX = upright ? 0.05 : 0.35; pose.headZ = -side * 0.45;
+    } else {
+      sqTarget = 1 + 0.35 * amt; pose.tilt = -side * 0.08; pose.hop = 0.5 * amt;
+      pose.armLx = 2.9; pose.armRx = 2.9; pose.armLz = -0.45; pose.armRz = 0.45;
+      pose.headX = upright ? -0.05 : -0.3; pose.headZ = side * 0.15;
+    }
     // every so often, a random emote spin
     fx.idleT += dt;
     if (fx.idleT > 6) { fx.idleT = 0; trick(); fx.sq.v += 8; SFX.honk(); meme('idle'); }
@@ -1593,7 +1751,7 @@ function frame(now) {
 
   updateIdleSong(dt, pl.grounded && !moving);
 
-  const k = 1 - Math.exp(-dt * 16), L =(o, key, v) => { o[key] += (v - o[key]) * k; };
+  const k = 1 - Math.exp(-dt * (snappy ? 30 : 16)), L =(o, key, v) => { o[key] += (v - o[key]) * k; };
   const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
   if (windmill) { u.armL.rotation.x = t * 20; u.armR.rotation.x = t * 20 + Math.PI; }
   else {
@@ -1610,10 +1768,19 @@ function frame(now) {
 
   // under-damped spring = jelly overshoot; volume-preserving squash
   fx.sq.v += ((sqTarget - fx.sq.x) * 260 - fx.sq.v * 9) * dt;
-  fx.sq.x = Math.min(1.7, Math.max(0.45, fx.sq.x + fx.sq.v * dt));
-  const sy = fx.sq.x, sxz = 1 / Math.sqrt(sy);
+  fx.sq.x = Math.min(1.8, Math.max(0.4, fx.sq.x + fx.sq.v * dt));
+  // side tilt gets its own wobbly spring so snaps overshoot and settle
+  fx.tilt.v += ((pose.tilt - fx.tilt.x) * 300 - fx.tilt.v * 12) * dt;
+  fx.tilt.x += fx.tilt.v * dt;
+  // head pop: a springy size boost that swells, overshoots and settles back
+  fx.pop.v += (-fx.pop.x * 400 - fx.pop.v * 14) * dt;
+  fx.pop.x += fx.pop.v * dt;
+  // the South Park rig's huge round head reads as a pancake or a pill under full squash,
+  // so it squashes half as much and its head keeps its shape, only popping on the beat
+  const sp = u.style === 'southpark';
+  const sy = sp ? 1 + (fx.sq.x - 1) * 0.45 : fx.sq.x, sxz = 1 / Math.sqrt(sy);
   // big-head bobble that exaggerates the squash
-  u.head.scale.setScalar(1 + (1 - sy) * 0.7);
+  setHeadScale(u, sp ? 1 + fx.pop.x * 0.4 : Math.max(0.85, 1 + (1 - sy) * 0.7) + fx.pop.x * 0.7, sxz, sy);
 
   // tweened flips / spins with overshoot
   let flipX = 0, spinY = 0;
@@ -1626,7 +1793,7 @@ function frame(now) {
   character.position.set(pl.x, pl.y, pl.z);
   u.body.scale.set(sxz, sy, sxz);
   u.body.position.y = fx.p.hop + 2.5 * (sy - 1); // keep feet planted while squashing
-  u.body.rotation.set(fx.p.lean * speedK + fx.p.pitch + flipX, fx.p.bodyY + spinY, fx.p.bodyZ);
+  u.body.rotation.set(fx.p.lean * speedK + fx.p.pitch + flipX, fx.p.bodyY + spinY, fx.p.bodyZ + fx.tilt.x);
 
   // cape flaps with speed and falling
   const flap = Math.sin(now / 90) * 0.12 * (0.3 + speedK);
