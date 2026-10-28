@@ -1718,6 +1718,7 @@ const fx = {
 function trick() { fx.flip = 0; fx.flipAxis = Math.random() < 0.5 ? 'x' : 'y'; }
 
 // ---------- Sound (synthesized, no audio files) ----------
+const MUSIC_LEVEL = 1.8;
 let actx = null, master = null, musicGain = null, soundOn = true, musicOn = false, musicStart = 0;
 const masterLevel = () => soundOn ? 0.5 * settings.volume : 0;
 function audio() {
@@ -1726,7 +1727,11 @@ function audio() {
     if (!AC) return null;
     actx = new AC();
     master = actx.createGain(); master.gain.value = masterLevel(); master.connect(actx.destination);
-    musicGain = actx.createGain(); musicGain.gain.value = 0.55 * settings.music; musicGain.connect(master);
+    // music runs hot through a compressor so it's loud without clipping
+    const comp = actx.createDynamicsCompressor();
+    comp.threshold.value = -14; comp.ratio.value = 4; comp.attack.value = 0.005; comp.release.value = 0.2;
+    comp.connect(master);
+    musicGain = actx.createGain(); musicGain.gain.value = MUSIC_LEVEL * settings.music; musicGain.connect(comp);
   }
   if (actx.state === 'suspended') actx.resume();
   return actx;
@@ -1960,7 +1965,7 @@ function updateChime() {
 let musicFade = 1;
 function updateMusicFade(dt, still) {
   musicFade = Math.max(0, Math.min(1, musicFade + (still ? -dt * 3 : dt * 2)));
-  if (musicGain) musicGain.gain.value = 0.55 * settings.music * musicFade;
+  if (musicGain) musicGain.gain.value = MUSIC_LEVEL * settings.music * musicFade;
 }
 // floating "Z"s rise from your head while you sleep
 const zzz = [];
@@ -3061,7 +3066,8 @@ function frame(now) {
 
   if (asleep && (now - lastInput) / 1000 <= SLEEP_AFTER) { asleep = false; fx.sq.v += 10; fx.pop.v += 20; }
   updateZzz(dt); updateChime();
-  updateMusicFade(dt, pl.grounded && !moving && !emote);
+  // the title screen keeps playing; in the game it goes quiet while you stand still
+  updateMusicFade(dt, pl.grounded && !moving && !emote && !document.body.classList.contains('title-open'));
 
   const k = 1 - Math.exp(-dt * (snappy ? 30 : 16)), L =(o, key, v) => { o[key] += (v - o[key]) * k; };
   const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
