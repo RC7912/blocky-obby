@@ -8,12 +8,12 @@ A Minecraft-style obby (obstacle course) generator that runs in your browser —
 
 - **Endless courses** — every seed makes a different obby. Pick the number of stages and the difficulty (Easy / Normal / Hard).
 - **Obstacles** — jumps, thin beams, moving platforms, spinners, slime bounce pads, zigzags, disappearing glass, lava floors, magma strips, conveyor belts, slippery ice and sweeping magma pillars.
-- **Four worlds** — Overworld, Nether, Frozen Peaks and The End, each with its own blocks, sky and floating particles. Pick one or let the seed choose.
+- **Five worlds** — Overworld, Nether, Frozen Peaks, The End and 🪟 Windows XP (Bliss sky and hills, window and taskbar platforms, Start-button checkpoints), each with its own blocks, sky and floating particles. Pick one or let the seed choose.
 - **Power-ups** — ⚡ speed boost, 🦘 super jump (with a triple jump) and 🛡️ a shield that saves you from one lava hit.
 - **Coins and a hat shop** — grab 🪙 along the course; they're banked when you finish, plus a finish bonus. Spend them on hats like a crown, top hat, halo or a spinning propeller cap.
 - **Best times and ghosts** — your best time per course is saved, and a see-through 👻 ghost replays your best run so you can race yourself.
 - **Daily challenge** — one course per day that's the same for everyone, so it's a good place to meet other players.
-- **Minecraft look** — pixel textures for grass, dirt, sand, snow, ice, stone, bricks, planks, netherrack, end stone, purpur, obsidian, gold, emerald and diamond, plus blocky clouds.
+- **Minecraft look** — pixel textures for grass, dirt, sand, snow, ice, stone, bricks, planks, netherrack, end stone, purpur, obsidian, XP windows, gold, emerald and diamond, plus blocky clouds.
 - **Double jump** — press jump again in the air.
 - **Skins** — 8 characters, or make your own with custom colors, trails and neon glow.
 - **Two art styles** — switch between blocky Roblox-style and a round paper-cutout South Park style in the menu. Your skin colors work with both, and other players see the style you picked.

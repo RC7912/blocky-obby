@@ -347,7 +347,16 @@ const PAL = {
   endstone: ['#dbdea0', '#e2e5ad', '#cfd291', '#e8eab8'],
   purpur: ['#a77aa7', '#b386b3', '#9a6c9a', '#ab80ab'],
   obsidian: ['#140f1f', '#1d1530', '#0f0a17', '#22193a'],
+  bliss: ['#5fa83a', '#6cb543', '#79c24c', '#549a33', '#83cb55'],
+  blissDeep: ['#3f8a2a', '#4a952f', '#367a24', '#438d2c'],
+  xpWindow: ['#ece9d8', '#f1efe2', '#e4e1cf'],
 };
+// Windows XP pieces: blue title bar with a red close button, beige window body
+function xpTitleBar(g, s, h) {
+  const bar = ['#3d83f5', '#2a6ff0', '#1b5ce0', '#0a4ad0', '#0831d9'];
+  for (let y = 0; y < h; y++) { g.fillStyle = bar[Math.min(bar.length - 1, Math.round(y * (bar.length - 1) / Math.max(1, h - 1)))]; g.fillRect(0, y, s, 1); }
+  g.fillStyle = '#9cc4ff'; g.fillRect(0, 0, s, 1);
+}
 
 const TEX = {
   grassTop: pixelTex((g, s) => speckle(g, s, PAL.grass)),
@@ -453,6 +462,37 @@ const TEX = {
     speckle(g, s, PAL.obsidian);
     for (let i = 0; i < 6; i++) px(g, Math.random() * s | 0, Math.random() * s | 0, '#5b3e9a');
   }),
+  bliss: pixelTex((g, s) => speckle(g, s, PAL.bliss)),
+  blissSide: pixelTex((g, s) => { speckle(g, s, PAL.blissDeep); fringe(g, s, PAL.bliss, 4); }),
+  xpWindowTop: pixelTex((g, s) => {
+    speckle(g, s, PAL.xpWindow);
+    xpTitleBar(g, s, 4);
+    g.fillStyle = '#e0442a'; g.fillRect(12, 1, 3, 2);   // close button
+    px(g, 13, 1, '#ffffff'); px(g, 13, 2, '#ffffff');
+    g.fillStyle = '#0831d9'; g.fillRect(0, 4, 1, s - 4); g.fillRect(s - 1, 4, 1, s - 4); g.fillRect(0, s - 1, s, 1);
+    g.fillStyle = '#b8b4a2'; g.fillRect(3, 7, 7, 1); g.fillRect(3, 10, 9, 1); g.fillRect(3, 13, 5, 1);   // window text
+  }),
+  xpWindowSide: pixelTex((g, s) => {
+    speckle(g, s, PAL.xpWindow);
+    xpTitleBar(g, s, 3);
+    g.fillStyle = '#0831d9'; g.fillRect(0, 0, 1, s); g.fillRect(s - 1, 0, 1, s);
+  }),
+  xpTaskbar: pixelTex((g, s) => {
+    xpTitleBar(g, s, s);
+    g.fillStyle = '#5a9cf8'; g.fillRect(0, 1, s, 1);
+    g.fillStyle = '#0f8de0'; g.fillRect(10, 4, 5, 8);   // system tray
+    g.fillStyle = '#ffffff'; g.fillRect(11, 7, 3, 1);
+  }),
+  // green Start button with the four-colour flag
+  xpStart: pixelTex((g, s) => {
+    speckle(g, s, ['#3c9a3c', '#41a141', '#379237']);
+    g.fillStyle = '#6fd06f'; g.fillRect(0, 0, s, 1); g.fillRect(0, 0, 1, s);
+    g.fillStyle = '#226f22'; g.fillRect(0, s - 1, s, 1); g.fillRect(s - 1, 0, 1, s);
+    g.fillStyle = '#f35325'; g.fillRect(5, 5, 3, 3);
+    g.fillStyle = '#81bc06'; g.fillRect(8, 5, 3, 3);
+    g.fillStyle = '#05a6f0'; g.fillRect(5, 8, 3, 3);
+    g.fillStyle = '#ffba08'; g.fillRect(8, 8, 3, 3);
+  }),
   lava: pixelTex((g, s) => {
     speckle(g, s, PAL.lava);
     for (let i = 0; i < 10; i++) { const x = Math.random() * s | 0, y = Math.random() * s | 0; px(g, x, y, '#ffd84a'); px(g, (x + 1) % s, y, '#ffe36e'); }
@@ -491,6 +531,10 @@ const BLOCKS = {
   endstone: block(TEX.endstone),
   purpur: block(TEX.purpur),
   obsidian: block(TEX.obsidian, TEX.obsidian, TEX.obsidian, { emissive: 0x0a0414 }),
+  bliss: block(TEX.bliss, TEX.blissSide, TEX.blissSide),
+  xpWindow: block(TEX.xpWindowTop, TEX.xpWindowSide, TEX.xpWindowSide),
+  xpTaskbar: block(TEX.xpTaskbar, TEX.xpTaskbar, TEX.xpTaskbar, { emissive: 0x05123a }),
+  xpStart: block(TEX.xpStart, TEX.xpStart, TEX.xpStart, { emissive: 0x062a06 }),
 };
 
 // ---------- Worlds ----------
@@ -505,9 +549,12 @@ const THEMES = {
     hemi: [0xffffff, 0xa8c0e0, 0.75], sun: 0.7, sunDisc: true, clouds: true, ambient: 'snow' },
   end: { name: '🌌 The End', biomes: ['endstone', 'purpur', 'endstone', 'obsidian'], cp: 'purpur', sky: [0x07031a, 0x3b1d6e, 0x05020f],
     hemi: [0xd8c4ff, 0x2a1840, 0.75], sun: 0.4, sunDisc: false, clouds: false, ambient: 'void' },
+  // the Bliss wallpaper: deep blue sky, soft clouds, green hills below
+  xp: { name: '🪟 Windows XP', biomes: ['bliss', 'xpWindow', 'bliss', 'xpTaskbar'], cp: 'xpStart', sky: [0x1f5fd6, 0xa9d1f7, 0x4f9a35],
+    hemi: [0xffffff, 0x6aa84f, 0.75], sun: 0.8, sunDisc: true, clouds: true, ambient: 'xp' },
 };
 // "auto" picks a world from the seed, with the Overworld twice as likely
-const AUTO_WORLDS = ['overworld', 'overworld', 'nether', 'frozen', 'end'];
+const AUTO_WORLDS = ['overworld', 'overworld', 'nether', 'frozen', 'end', 'xp'];
 const worldFor = (seed, w) => THEMES[w] ? w : AUTO_WORLDS[hashStr('world|' + seed) % AUTO_WORLDS.length];
 let theme = THEMES.overworld;
 
@@ -2474,6 +2521,7 @@ function frame(now) {
     const a = Math.random() * Math.PI * 2, r = 4 + Math.random() * 26, x = pl.x + Math.cos(a) * r, z = pl.z + Math.sin(a) * r;
     if (theme.ambient === 'embers') emit(x, pl.y - 6 + Math.random() * 6, z, tmpColor.setHSL(0.04 + Math.random() * 0.06, 1, 0.55), 0, 3 + Math.random() * 3, 0, 2.5, 0.25, -1);
     else if (theme.ambient === 'snow') emit(x, pl.y + 12 + Math.random() * 6, z, tmpColor.set(0xffffff), 0.6, -4, 0.3, 4, 0.3, 0);
+    else if (theme.ambient === 'xp') emit(x, pl.y - 4 + Math.random() * 10, z, tmpColor.set(rand([0xf35325, 0x81bc06, 0x05a6f0, 0xffba08])), 0, 0.8, 0, 3, 0.35, 0);
     else emit(x, pl.y - 4 + Math.random() * 10, z, tmpColor.setHSL(0.75 + Math.random() * 0.1, 0.8, 0.7), 0, 0.6, 0, 3, 0.3, 0);
   }
   MAT.lava.emissiveIntensity = 0.4 + Math.sin(now / 400) * 0.08;
