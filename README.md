@@ -13,6 +13,7 @@ A Minecraft-style obby (obstacle course) generator that runs in your browser —
 - **Coins and a hat shop** — grab 🪙 along the course; they're banked when you finish, plus a finish bonus. Spend them on hats like a crown, top hat, halo or a spinning propeller cap.
 - **Best times and ghosts** — your best time per course is saved, and a see-through 👻 ghost replays your best run so you can race yourself.
 - **Daily challenge** — one course per day that's the same for everyone, so it's a good place to meet other players.
+- **Realistic textures** — the Overworld, Nether, Frozen Peaks and The End use detailed textures with bumpy surfaces (grass blades, pebbly dirt, cobblestone, wood grain, glowing magma cracks, flowing lava). Turn off **🌄 Realistic textures** in ⚙️ Settings to go back to the blocky pixel look.
 - **Minecraft look** — pixel textures for grass, dirt, sand, snow, ice, stone, bricks, planks, netherrack, end stone, purpur, obsidian, XP windows, gold, emerald and diamond, plus blocky clouds.
 - **Double jump** — press jump again in the air.
 - **Skins** — 8 characters, or make your own with custom colors, trails and neon glow.
@@ -20,7 +21,7 @@ A Minecraft-style obby (obstacle course) generator that runs in your browser —
 - **Tweenslop animation** — squash and stretch, flips, bobble head, screen shake and meme popups.
 - **Emotes** — dance, wave, dab, floss, sit, cheer, breakdance, laugh, play dead… or explode 💥.
 - **Multiplayer** — everyone on the same course plays together, with name tags and chat. Press **🏁 Race** for a countdown race where everyone restarts together and finishers are ranked 🥇🥈🥉.
-- **Settings** — volume, music, look sensitivity, field of view, and toggles for shadows, screen shake, meme popups, speed lines and the ghost.
+- **Settings** — volume, music, look sensitivity, field of view, and toggles for shadows, screen shake, meme popups, speed lines, the ghost and realistic textures.
 - **Music and sound effects**, all made in code with the Web Audio API. The music plays while you move and goes quiet when you stand still.
 - **AFK sleeping** — leave the game alone for 20 seconds and your character lies down on the floor and snores 💤. Press any key to wake up.
 
