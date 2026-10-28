@@ -625,11 +625,12 @@ let theme = THEMES.overworld;
 
 const MAT = {
   magma: lambert({ map: TEX.magma, emissive: 0xffffff, emissiveMap: TEX.magma, emissiveIntensity: 0.6 }),
-  lava: lambert({ map: TEX.lava, emissive: 0xffffff, emissiveMap: TEX.lava, emissiveIntensity: 0.4 }),
+  // dim diffuse + strong orange emissive keeps lava a saturated glowing orange instead of washing out to yellow
+  lava: lambert({ map: TEX.lava, color: 0x8a4a2a, emissive: 0xff5200, emissiveMap: TEX.lava, emissiveIntensity: 0.9 }),
   glass: lambert({ map: TEX.glass, transparent: true, opacity: 1, alphaTest: 0.05, side: THREE.DoubleSide }),
   cloud: lambert({ color: 0xffffff, emissive: 0x9a9a9a, transparent: true, opacity: 0.85 }),
   power: lambert({ transparent: true, opacity: 0.9 }),
-  coin: lambert({ color: 0xffd84a, emissive: 0x7a5a00 }),
+  coin: lambert({ color: 0xffd84a, emissive: 0xb08a00 }),
 };
 // ---------- Realistic textures ----------
 // The classic worlds can swap their pixel art for 256px photo-style textures with bump maps.
@@ -1031,6 +1032,9 @@ const sunGlow = (() => {
   g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
   return new THREE.CanvasTexture(c);
 })();
+// additive glow: a soft yellow halo behind every coin
+const coinGlow = new THREE.SpriteMaterial({ map: sunGlow, color: 0xffd21a, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, opacity: 0.85 });
+coinGlow.userData.shared = true;
 for (const [size, color, opacity] of [[150, 0xfff3b0, 0.18], [70, 0xfffbe0, 1]]) {
   const m = new THREE.Mesh(new THREE.PlaneGeometry(size, size), new THREE.MeshBasicMaterial({ color, transparent: true, opacity, fog: false, depthWrite: false }));
   m.renderOrder = -1;
@@ -1196,7 +1200,7 @@ function restyleCourse() {
   if (realOn) coinTex ??= makeCoinTex();
   const c = MAT.coin;
   c.map = realOn ? coinTex.t : null; c.bumpMap = realOn ? coinTex.b : null; c.bumpScale = 0.04;
-  c.color.setHex(realOn ? 0xffffff : 0xffd84a); c.emissive.setHex(realOn ? 0x3a2a00 : 0x7a5a00);
+  c.color.setHex(realOn ? 0xffffff : 0xffd84a); c.emissive.setHex(realOn ? 0x806000 : 0xb08a00);
   c.specular.setHex(realOn ? 0xfff0b0 : 0); c.shininess = realOn ? 90 : 8;
   c.needsUpdate = true;
 }
@@ -1253,6 +1257,8 @@ function generate(seed, stages, diff, world) {
   function addCoin(x, y, z) {
     const mesh = new THREE.Mesh(coinGeo, MAT.coin);
     mesh.position.set(x, y, z); mesh.castShadow = true; course.add(mesh);
+    const glow = new THREE.Sprite(coinGlow);
+    glow.scale.setScalar(3.4); mesh.add(glow);
     coins.push({ x, y, z, mesh, got: false });
   }
   // world position of a point in a part's local frame
@@ -2872,6 +2878,7 @@ start();
 
 // ---------- Main loop ----------
 const camTarget = new THREE.Vector3(pl.x, pl.y, pl.z);
+let lavaNear = [], lavaScanT = 0;
 let last = performance.now();
 function frame(now) {
   const dt = Math.max(0, Math.min((now - last) / 1000, 1 / 20));   // first frame's timestamp can predate `last`
@@ -3056,6 +3063,8 @@ function frame(now) {
   TEX.lava.offset.x += dt * 0.03; TEX.lava.offset.y += dt * 0.06;
   TEX.conveyor.offset.x -= dt * beltSpeed * TEX.conveyor.repeat.x / CONVEYOR_TILE;
   for (const c of coins) if (!c.got) c.mesh.rotation.y = t * 3 + c.x;
+  // lava within 60 units gets sparks (checked a few times a second)
+  if ((lavaScanT -= dt) <= 0) { lavaScanT = 0.3; lavaNear = parts.filter(p => p.lava && Math.hypot(p.x - pl.x, p.z - pl.z) < 60 + p.sz / 2); }
   // power-up countdown
   if (pl.power && (pl.power.t -= dt) <= 0) { flashText(`${POWERS[pl.power.type].icon} wore off`); pl.power = null; }
   // world ambience: embers rise, snow falls, End motes drift
@@ -3066,7 +3075,14 @@ function frame(now) {
     else if (theme.ambient === 'xp') emit(x, pl.y - 4 + Math.random() * 10, z, tmpColor.set(rand([0xf35325, 0x81bc06, 0x05a6f0, 0xffba08])), 0, 0.8, 0, 3, 0.35, 0);
     else emit(x, pl.y - 4 + Math.random() * 10, z, tmpColor.setHSL(0.75 + Math.random() * 0.1, 0.8, 0.7), 0, 0.6, 0, 3, 0.3, 0);
   }
-  MAT.lava.emissiveIntensity = 0.4 + Math.sin(now / 400) * 0.08;
+  MAT.lava.emissiveIntensity = 0.9 + Math.sin(now / 400) * 0.15;
+  coinGlow.opacity = 0.7 + Math.sin(now / 160) * 0.2;
+  // sparks pop up off lava near you
+  for (const p of lavaNear) if (Math.random() < dt * 6) {
+    const c = Math.cos(p.yaw), s = Math.sin(p.yaw), lx = (Math.random() - 0.5) * p.sx, lz = (Math.random() - 0.5) * p.sz;
+    emit(p.x + lx * c + lz * s, p.y + p.hy, p.z - lx * s + lz * c, tmpColor.setHSL(0.05 + Math.random() * 0.07, 1, 0.55),
+      (Math.random() - 0.5) * 2, 4 + Math.random() * 5, (Math.random() - 0.5) * 2, 1.1, 0.25, 9);
+  }
   MAT.magma.emissiveIntensity = 0.5 + Math.sin(now / 300) * 0.2;
   sky.position.copy(camera.position);
   sunDisc.position.copy(camera.position).addScaledVector(SUN_DIR, 700);
