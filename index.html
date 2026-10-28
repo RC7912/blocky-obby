@@ -34,6 +34,36 @@
   button.primary { background: #3c8527; box-shadow: inset 2px 2px 0 #6fbf4a, inset -2px -3px 0 #245218; }
   button.primary:hover { background: #4a9e31; color: #ffffa0; }
   #toggle { display: none; }
+  #gen { max-height: calc(100vh - 24px); overflow-y: auto; }
+  .modal { position: fixed; inset: 0; z-index: 10; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,.5); }
+  .modal.open { display: flex; }
+  .modal > .panel { position: static; width: min(480px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow-y: auto; }
+  .modal h2 { margin: 0 0 10px; font-family: "Press Start 2P", monospace; font-size: 16px; line-height: 1.5; color: #ffff55; }
+  .modal p { margin: 4px 0 10px; color: #d0d0d0; }
+  #shopItems { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
+  .item { background: rgba(255,255,255,.07); border: 2px solid #000; padding: 8px; text-align: center; }
+  .item .ic { font-size: 34px; line-height: 1.1; }
+  .item button { width: 100%; margin-top: 6px; font-size: 18px; }
+  .item.on { outline: 2px solid #ffff55; }
+  #hud .dim { color: #c8c8c8; font-size: 19px; }
+  #speedLines { position: fixed; inset: -25%; pointer-events: none; opacity: 0;
+    background: repeating-conic-gradient(from 0deg at 50% 50%, rgba(255,255,255,0) 0deg 5deg, rgba(255,255,255,.6) 5deg 6deg);
+    -webkit-mask-image: radial-gradient(circle at 50% 50%, transparent 22%, #000 55%); mask-image: radial-gradient(circle at 50% 50%, transparent 22%, #000 55%); }
+  #title { background: rgba(0,0,0,.35); }
+  .modal > .panel { background: rgba(24,24,24,.94); }
+  body.title-open #gen, body.title-open #hud, body.title-open #help, body.title-open #emotes, body.title-open #jumpBtn { display: none; }
+  #title .panel { text-align: center; width: min(420px, calc(100vw - 32px)); }
+  #title h1 { margin: 6px 0 12px; font-family: "Press Start 2P", monospace; font-size: clamp(28px, 8vw, 40px); line-height: 1.25; color: #ffff55;
+    text-shadow: 4px 4px 0 #3f3f00, 8px 8px 0 rgba(0,0,0,.35); animation: logoBob 1.6s ease-in-out infinite; }
+  @keyframes logoBob { 50% { transform: translateY(-6px) rotate(-1.5deg); } }
+  #title .row button { font-size: 22px; padding: 8px; }
+  #title .small { font-size: 16px; color: #a8a8a8; }
+  .set { display: block; margin: 8px 0; color: #d0d0d0; }
+  .set input[type=range] { width: 100%; accent-color: #4a9e31; }
+  .checks { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; margin: 10px 0; }
+  .checks label { display: flex; align-items: center; gap: 6px; }
+  #countdown { position: fixed; top: 34%; left: 50%; transform: translate(-50%, -50%); z-index: 6; display: none; pointer-events: none;
+    font-family: "Press Start 2P", monospace; font-size: 64px; color: #ffff55; text-shadow: 5px 5px 0 #000; }
   #hud { top: 12px; right: 12px; text-align: right; line-height: 1.3; min-width: 150px; font-size: 22px; }
   #hud b { font-family: "Press Start 2P", monospace; font-size: 18px; color: #ffff55; }
   #help { bottom: 12px; left: 12px; color: #d0d0d0; font-size: 18px; }
@@ -77,7 +107,8 @@
   }
 </style>
 </head>
-<body>
+<body class="title-open">
+<div id="speedLines"></div>
 <div id="gen" class="panel">
   <button id="toggle">☰</button>
   <h1>Blocky Obby</h1>
@@ -93,6 +124,8 @@
     <option value="normal" selected>Normal</option>
     <option value="hard">Hard</option>
   </select>
+  <label for="world">World</label>
+  <select id="world"></select>
   <label for="skin">Character</label>
   <select id="skin"></select>
   <label for="styleSel">Style</label>
@@ -122,6 +155,11 @@
     <button id="genBtn" class="primary">Generate</button>
   </div>
   <div class="row">
+    <button id="dailyBtn">📅 Daily</button>
+    <button id="shopBtn">🛒 Shop</button>
+    <button id="setBtn" title="Settings">⚙️</button>
+  </div>
+  <div class="row">
     <button id="skipBtn">Skip stage</button>
     <button id="linkBtn">Copy link</button>
   </div>
@@ -130,23 +168,57 @@
     <button id="musicBtn">🎵 Music</button>
   </div>
   <div class="row">
+    <button id="raceBtn">🏁 Race</button>
     <button id="netBtn" class="primary">🌐 Multiplayer on</button>
   </div>
 </div>
 <div id="hud" class="panel">
   Stage <b id="stage">0</b> / <span id="total">0</span><br>
   ⏱ <span id="time">0.0</span>s &nbsp; 💀 <span id="deaths">0</span><br>
+  🪙 <span id="runCoins">0</span> <span class="dim">· 💰 <span id="wallet">0</span></span><br>
+  <span id="bestHud" class="dim"></span>
+  <div id="powerHud"></div>
   🌐 <span id="online">connecting…</span>
 </div>
-<div id="help" class="panel">WASD move · Space jump (again in air = double jump) · Click + mouse to look · Wheel zoom · R respawn · M music · 1-9 emotes · X explode · T chat</div>
+<div id="help" class="panel">WASD move · Space jump (again in air = double jump) · Click + mouse to look · Wheel zoom · R respawn · M music · 1-9 emotes · X explode · T chat · 🪙 coins buy hats in the 🛒 shop</div>
 <div id="emotes" class="panel"></div>
 <div id="chat" class="panel"></div>
 <input id="chatIn" maxlength="80" placeholder="Say something… (Enter to send, Esc to cancel)">
 <div id="flash"></div>
+<div id="countdown"></div>
 <div id="win"><div class="panel">
   <h2>🏆 You beat the obby!</h2>
   <p id="winStats"></p>
   <div class="row"><button id="againBtn">Play again</button><button id="nextBtn" class="primary">New obby</button></div>
+</div></div>
+<div id="title" class="modal open"><div class="panel">
+  <h1>BLOCKY<br>OBBY</h1>
+  <p>Endless Minecraft-style obstacle courses. Dance, race your friends, grab coins, buy hats.</p>
+  <div class="row"><button id="playBtn" class="primary">▶ Play</button></div>
+  <div class="row"><button id="tDaily">📅 Daily challenge</button></div>
+  <div class="row"><button id="tShop">🛒 Shop</button><button id="tSet">⚙️ Settings</button></div>
+  <p class="small">WASD + Space to play · works on phones too</p>
+</div></div>
+<div id="settingsM" class="modal"><div class="panel">
+  <h2>⚙️ Settings</h2>
+  <label class="set">Sound volume<input type="range" id="s_volume" min="0" max="1" step="0.05"></label>
+  <label class="set">Music volume<input type="range" id="s_music" min="0" max="1" step="0.05"></label>
+  <label class="set">Look sensitivity<input type="range" id="s_sens" min="0.3" max="2.5" step="0.1"></label>
+  <label class="set">Field of view<input type="range" id="s_fov" min="55" max="100" step="1"></label>
+  <div class="checks">
+    <label><input type="checkbox" id="s_shadows"> Shadows</label>
+    <label><input type="checkbox" id="s_shake"> Screen shake</label>
+    <label><input type="checkbox" id="s_memes"> Meme popups</label>
+    <label><input type="checkbox" id="s_speedLines"> Speed lines</label>
+    <label><input type="checkbox" id="s_ghost"> 👻 Best-run ghost</label>
+  </div>
+  <div class="row"><button class="close primary">Done</button></div>
+</div></div>
+<div id="shop" class="modal"><div class="panel">
+  <h2>🛒 Hat shop</h2>
+  <p>💰 <b id="shopWallet">0</b> coins. Grab 🪙 on the course and finish to bank them (plus a finish bonus).</p>
+  <div id="shopItems"></div>
+  <div class="row"><button class="close">Close</button></div>
 </div></div>
 <button id="jumpBtn">JUMP</button>
 
@@ -167,6 +239,15 @@ function mulberry32(a) {
   };
 }
 
+// saved progress (JSON in localStorage); falls back quietly when storage is blocked
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
+};
+
+const settings = Object.assign({ volume: 0.8, music: 0.7, sens: 1, fov: 70, shadows: true, shake: true, memes: true, ghost: true, speedLines: true },
+  store.get('obbySettings', {}));
+
 // ---------- Renderer / scene ----------
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -179,7 +260,8 @@ const scene = new THREE.Scene();
 scene.fog = new THREE.Fog(0xc0d8ff, 140, 360);
 const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.1, 1000);
 
-scene.add(new THREE.HemisphereLight(0xffffff, 0x8899aa, 0.65));
+const hemi = new THREE.HemisphereLight(0xffffff, 0x8899aa, 0.65);
+scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xffffff, 0.75);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
@@ -239,6 +321,13 @@ const PAL = {
   emerald: ['#41f384', '#17dd62', '#2be872', '#00c94a'],
   diamond: ['#a1fbe8', '#4aedd9', '#75f5e2', '#2bd8c4'],
   lava: ['#c4430c', '#d0520f', '#dc6614', '#e87a18', '#b8380a', '#d85c12'],
+  ice: ['#9cc4f4', '#a8cdf8', '#8fbaf0', '#b4d6fb'],
+  netherrack: ['#6f2a28', '#7d3330', '#5e2220', '#8a3a35', '#4f1c1a'],
+  blackstone: ['#2a2629', '#332e31', '#221f22', '#3b3539'],
+  netherBricks: ['#2c1416', '#341719', '#3a1a1c'],
+  endstone: ['#dbdea0', '#e2e5ad', '#cfd291', '#e8eab8'],
+  purpur: ['#a77aa7', '#b386b3', '#9a6c9a', '#ab80ab'],
+  obsidian: ['#140f1f', '#1d1530', '#0f0a17', '#22193a'],
 };
 
 const TEX = {
@@ -309,6 +398,42 @@ const TEX = {
       }
     }
   }),
+  ice: pixelTex((g, s) => {
+    speckle(g, s, PAL.ice);
+    for (const [x, y] of [[2, 3], [3, 2], [4, 1], [10, 8], [11, 7], [12, 6], [6, 12], [7, 11]]) px(g, x, y, 'rgba(255,255,255,.85)');
+  }),
+  // dark belt with yellow chevrons pointing along +x (the way it pushes)
+  conveyor: pixelTex((g, s) => {
+    g.fillStyle = '#3a3a3a'; g.fillRect(0, 0, s, s);
+    g.fillStyle = '#2b2b2b'; for (let x = 0; x < s; x += 4) g.fillRect(x, 0, 1, s);
+    g.fillStyle = '#f5c518';
+    for (const x0 of [2, 10]) for (let k = 0; k < 4; k++) { g.fillRect(x0 + k, 4 + k, 2, 1); g.fillRect(x0 + k, 11 - k, 2, 1); }
+  }),
+  netherrack: pixelTex((g, s) => {
+    speckle(g, s, PAL.netherrack);
+    for (let i = 0; i < 8; i++) px(g, Math.random() * s | 0, Math.random() * s | 0, '#3d1414');
+  }),
+  blackstone: pixelTex((g, s) => {
+    speckle(g, s, PAL.blackstone);
+    g.fillStyle = '#18151a'; for (let i = 0; i < 5; i++) g.fillRect(Math.random() * s | 0, Math.random() * s | 0, 3, 1);
+  }),
+  netherBricks: pixelTex((g, s) => {
+    speckle(g, s, PAL.netherBricks);
+    g.fillStyle = '#140808';
+    for (let y = 0; y < s; y += 4) { g.fillRect(0, y + 3, s, 1); g.fillRect((y / 4) % 2 ? 2 : 10, y, 1, 3); }
+  }),
+  endstone: pixelTex((g, s) => {
+    speckle(g, s, PAL.endstone);
+    for (let i = 0; i < 7; i++) px(g, Math.random() * s | 0, Math.random() * s | 0, '#b8bb7e');
+  }),
+  purpur: pixelTex((g, s) => {
+    speckle(g, s, PAL.purpur);
+    g.fillStyle = '#7d567d'; g.fillRect(0, 7, s, 1); g.fillRect(0, 15, s, 1); g.fillRect(7, 0, 1, s); g.fillRect(15, 0, 1, s);
+  }),
+  obsidian: pixelTex((g, s) => {
+    speckle(g, s, PAL.obsidian);
+    for (let i = 0; i < 6; i++) px(g, Math.random() * s | 0, Math.random() * s | 0, '#5b3e9a');
+  }),
   lava: pixelTex((g, s) => {
     speckle(g, s, PAL.lava);
     for (let i = 0; i < 10; i++) { const x = Math.random() * s | 0, y = Math.random() * s | 0; px(g, x, y, '#ffd84a'); px(g, (x + 1) % s, y, '#ffe36e'); }
@@ -339,15 +464,49 @@ const BLOCKS = {
   gold: block(TEX.gold, TEX.gold, TEX.gold, { emissive: 0x2a2000 }),
   emerald: block(TEX.emerald, TEX.emerald, TEX.emerald, { emissive: 0x032a10 }),
   diamond: block(TEX.diamond, TEX.diamond, TEX.diamond, { emissive: 0x08302a }),
+  ice: block(TEX.ice, TEX.ice, TEX.ice, { transparent: true, opacity: 0.88 }),
+  conveyor: block(TEX.conveyor, TEX.stone),
+  netherrack: block(TEX.netherrack),
+  blackstone: block(TEX.blackstone),
+  netherBricks: block(TEX.netherBricks),
+  endstone: block(TEX.endstone),
+  purpur: block(TEX.purpur),
+  obsidian: block(TEX.obsidian, TEX.obsidian, TEX.obsidian, { emissive: 0x0a0414 }),
 };
-const BIOMES = ['grass', 'sand', 'grass', 'snow'];
+
+// ---------- Worlds ----------
+// biomes: platform blocks stage by stage; cp: checkpoint platform block; sky: top/horizon/bottom;
+// hemi: sky / ground light colours + intensity; ambient: floating particles around the player
+const THEMES = {
+  overworld: { name: '🌳 Overworld', biomes: ['grass', 'sand', 'grass', 'snow'], cp: 'bricks', sky: [0x6f9fff, 0xc0d8ff, 0xd8e6ff],
+    hemi: [0xffffff, 0x8899aa, 0.65], sun: 0.75, sunDisc: true, clouds: true, ambient: null },
+  nether: { name: '🔥 Nether', biomes: ['netherrack', 'blackstone', 'netherrack', 'netherBricks'], cp: 'netherBricks', sky: [0x2a0606, 0x9a3412, 0x1a0404],
+    hemi: [0xffc49a, 0x5a1a0a, 0.85], sun: 0.45, sunDisc: false, clouds: false, ambient: 'embers' },
+  frozen: { name: '❄️ Frozen Peaks', biomes: ['snow', 'snow', 'ice', 'snow'], cp: 'bricks', sky: [0x8fb8ff, 0xeef6ff, 0xffffff],
+    hemi: [0xffffff, 0xa8c0e0, 0.75], sun: 0.7, sunDisc: true, clouds: true, ambient: 'snow' },
+  end: { name: '🌌 The End', biomes: ['endstone', 'purpur', 'endstone', 'obsidian'], cp: 'purpur', sky: [0x07031a, 0x3b1d6e, 0x05020f],
+    hemi: [0xd8c4ff, 0x2a1840, 0.75], sun: 0.4, sunDisc: false, clouds: false, ambient: 'void' },
+};
+// "auto" picks a world from the seed, with the Overworld twice as likely
+const AUTO_WORLDS = ['overworld', 'overworld', 'nether', 'frozen', 'end'];
+const worldFor = (seed, w) => THEMES[w] ? w : AUTO_WORLDS[hashStr('world|' + seed) % AUTO_WORLDS.length];
+let theme = THEMES.overworld;
 
 const MAT = {
   magma: lambert({ map: TEX.magma, emissive: 0xffffff, emissiveMap: TEX.magma, emissiveIntensity: 0.6 }),
   lava: lambert({ map: TEX.lava, emissive: 0xffffff, emissiveMap: TEX.lava, emissiveIntensity: 0.4 }),
   glass: lambert({ map: TEX.glass, transparent: true, opacity: 1, alphaTest: 0.05, side: THREE.DoubleSide }),
   cloud: lambert({ color: 0xffffff, emissive: 0x9a9a9a, transparent: true, opacity: 0.85 }),
+  power: lambert({ transparent: true, opacity: 0.9 }),
+  coin: lambert({ color: 0xffd84a, emissive: 0x7a5a00 }),
 };
+// power-ups float on some checkpoints; touching one gives you its power for dur seconds
+const POWERS = {
+  speed: { icon: '⚡', name: 'Speed boost', color: 0x22d3ee, dur: 7 },
+  jump: { icon: '🦘', name: 'Super jump', color: 0x84cc16, dur: 8 },
+  shield: { icon: '🛡️', name: 'Shield', color: 0xfacc15, dur: 12 },
+};
+const coinGeo = new THREE.CylinderGeometry(0.7, 0.7, 0.18, 16).rotateX(Math.PI / 2);
 
 // Box whose UVs tile one texture repeat per `tile` units on every face.
 // Side faces are anchored to the top edge so grass/snow fringes line up.
@@ -414,6 +573,18 @@ function makeClouds(minX, maxX, minZ, maxZ, lowY, highY) {
   }
 }
 
+// recolour sky, fog and lights for a world
+function applyTheme(th) {
+  const [top, horizon, bottom] = th.sky, U = sky.material.uniforms;
+  U.top.value.setHex(top); U.horizon.value.setHex(horizon); U.bottom.value.setHex(bottom);
+  scene.fog.color.setHex(horizon);
+  document.body.style.background = '#' + horizon.toString(16).padStart(6, '0');
+  hemi.color.setHex(th.hemi[0]); hemi.groundColor.setHex(th.hemi[1]); hemi.intensity = th.hemi[2];
+  sun.intensity = th.sun;
+  sunDisc.visible = th.sunDisc;
+  clouds.visible = th.clouds;
+}
+
 // small canvas + nearest filtering = chunky pixel text with a Minecraft-style drop shadow
 function textSprite(text, color = '#fff') {
   const c = document.createElement('canvas'); c.width = 128; c.height = 32;
@@ -438,7 +609,7 @@ function textSprite(text, color = '#fff') {
 // ---------- Course ----------
 const course = new THREE.Group();
 scene.add(course);
-let parts = [], dynamic = [], checkpoints = [], minY = 0, totalStages = 0;
+let parts = [], dynamic = [], checkpoints = [], coins = [], minY = 0, totalStages = 0, beltSpeed = 0;
 
 // per-part copy of shared materials, for parts that fade or light up on their own
 const own = m => { const c = m.clone(); c.userData.shared = false; return c; };
@@ -447,8 +618,10 @@ function addPart(o) {
   const p = Object.assign({ yaw: 0, solid: true, kill: false, block: 'grass' }, o);
   p.hx = p.sx / 2; p.hy = p.sy / 2; p.hz = p.sz / 2;
   p.br = Math.hypot(p.hx, p.hz) + (p.move ? p.move.amp : 0) + 2;
+  p.ice = p.block === 'ice';
   let mat;
-  if (p.kill) mat = p.lava ? MAT.lava : MAT.magma;
+  if (p.power) { mat = own(MAT.power); mat.color.setHex(POWERS[p.power].color); mat.emissive.setHex(POWERS[p.power].color).multiplyScalar(0.5); }
+  else if (p.kill) mat = p.lava ? MAT.lava : MAT.magma;
   else if (p.vanish) mat = own(MAT.glass);
   else if (p.checkpoint !== undefined) mat = BLOCKS[p.block].map(own);
   else mat = BLOCKS[p.block];
@@ -459,7 +632,7 @@ function addPart(o) {
   if (p.invisible) p.mesh.visible = false;
   course.add(p.mesh);
   if (p.move) { p.bx = p.x; p.by = p.y; p.bz = p.z; p.dx = p.dy = p.dz = 0; }
-  if (p.move || p.spin || p.vanish) dynamic.push(p);
+  if (p.move || p.spin || p.vanish || p.power) dynamic.push(p);
   parts.push(p);
   minY = Math.min(minY, p.y);
   return p;
@@ -467,7 +640,7 @@ function addPart(o) {
 
 function clearCourse() {
   course.traverse(o => {
-    if (o.geometry) o.geometry.dispose();
+    if (o.geometry && o.geometry !== coinGeo) o.geometry.dispose();
     for (const m of [].concat(o.material || [])) {
       if (m.userData.shared) continue;
       if (m.map && !m.map.shared) m.map.dispose();
@@ -475,25 +648,28 @@ function clearCourse() {
     }
   });
   course.clear();
-  parts = []; dynamic = []; checkpoints = []; minY = 0;
+  parts = []; dynamic = []; checkpoints = []; coins = []; minY = 0;
 }
 
-function generate(seed, stages, diff) {
+function generate(seed, stages, diff, world) {
   clearCourse();
+  theme = THEMES[world];
+  applyTheme(theme);
   const rng = mulberry32(hashStr(`${seed}|${stages}|${diff}`));
   const R = (a, b) => a + rng() * (b - a);
   const pick = arr => arr[Math.floor(rng() * arr.length)];
   const D = {
-    easy:   { g: [2, 3.6], dy: 1.0, mv: 2.5, spin: 1.3, obs: 2, types: ['jump', 'jump', 'beam', 'mover', 'spinner', 'bounce', 'zigzag', 'lava', 'strips'] },
-    normal: { g: [3, 5.5], dy: 1.6, mv: 3.5, spin: 1.9, obs: 3, types: ['jump', 'beam', 'mover', 'spinner', 'bounce', 'zigzag', 'lava', 'strips', 'vanish'] },
-    hard:   { g: [4.5, 7], dy: 1.8, mv: 4.5, spin: 2.6, obs: 4, types: ['jump', 'beam', 'mover', 'mover', 'spinner', 'bounce', 'zigzag', 'lava', 'strips', 'vanish', 'vanish'] },
+    easy:   { g: [2, 3.6], dy: 1.0, mv: 2.5, spin: 1.3, belt: 4, obs: 2, types: ['jump', 'jump', 'beam', 'mover', 'spinner', 'bounce', 'zigzag', 'lava', 'strips', 'conveyor'] },
+    normal: { g: [3, 5.5], dy: 1.6, mv: 3.5, spin: 1.9, belt: 6, obs: 3, types: ['jump', 'beam', 'mover', 'spinner', 'bounce', 'zigzag', 'lava', 'strips', 'vanish', 'conveyor', 'ice', 'sweeper'] },
+    hard:   { g: [4.5, 7], dy: 1.8, mv: 4.5, spin: 2.6, belt: 8, obs: 4, types: ['jump', 'beam', 'mover', 'mover', 'spinner', 'bounce', 'zigzag', 'lava', 'strips', 'vanish', 'vanish', 'conveyor', 'ice', 'sweeper', 'sweeper'] },
   }[diff];
-  const biomeOffset = Math.floor(rng() * BIOMES.length);
+  const biomeOffset = Math.floor(rng() * theme.biomes.length);
   const G = () => R(D.g[0], D.g[1]);
+  beltSpeed = D.belt;
   let ang = 0, blk = 'grass';
 
   // spawn
-  let cur = addPart({ x: 0, y: 0, z: 0, sx: 14, sy: 1, sz: 14, block: 'grass' });
+  let cur = addPart({ x: 0, y: 0, z: 0, sx: 14, sy: 1, sz: 14, block: theme.biomes[0] });
   cur.hd = 7;
   const spawnLabel = textSprite('START'); spawnLabel.position.set(0, 10, 6); course.add(spawnLabel);
   checkpoints.push({ x: 0, y: 3, z: 0, ang: 0 });
@@ -507,7 +683,14 @@ function generate(seed, stages, diff) {
   function plat(gap, w, d, dy, lat = 0, extra = {}) {
     const p = addPart(Object.assign(step(gap, d, dy, lat), { sx: w, sy: 1, sz: d, yaw: ang, block: blk }, extra));
     p.hd = d / 2;
+    // a coin floats over some of the platforms that stay put
+    if (!p.move && !p.vanish && !p.bounce && rng() < 0.4) addCoin(p.x, p.y + 2.3, p.z);
     return (cur = p);
+  }
+  function addCoin(x, y, z) {
+    const mesh = new THREE.Mesh(coinGeo, MAT.coin);
+    mesh.position.set(x, y, z); mesh.castShadow = true; course.add(mesh);
+    coins.push({ x, y, z, mesh, got: false });
   }
   // world position of a point in a part's local frame
   function local(p, lx, ly, lz) {
@@ -565,6 +748,27 @@ function generate(seed, stages, diff) {
       addPart({ x: (first.x + last.x) / 2, y: y - 1.1, z: (first.z + last.z) / 2, sx: 12, sy: 0.6, sz: len, yaw: ang, kill: true, lava: true });
       plat(R(1.5, 3), 6, 6, 0);
     },
+    // belt that drags you sideways; flipping the yaw makes it push the other way
+    conveyor() {
+      plat(G(), 5, R(12, 18), R(-0.5, 0.8), 0, { block: 'conveyor', conveyor: D.belt, yaw: ang + (rng() < 0.5 ? Math.PI : 0) });
+      plat(G(), 5, 5, R(-0.5, 1));
+    },
+    // slippery ice bridge, then two small icy hops
+    ice() {
+      plat(G() * 0.8, 3, R(10, 14), R(-0.3, 0.5), 0, { block: 'ice' });
+      for (let i = 0; i < 2; i++) plat(G() * 0.8, 3, 3, R(-0.5, 1), R(-1.5, 1.5), { block: 'ice' });
+      plat(G(), 5, 5, 0);
+    },
+    // magma pillars sliding side to side across a long platform
+    sweeper() {
+      const w = 7, d = R(16, 22), p = plat(G(), w, d, R(-0.5, 0.5));
+      const n = Math.floor(d / 7);
+      for (let k = 0; k < n; k++) {
+        const z = n > 1 ? -d / 2 + 4 + k * (d - 8) / (n - 1) : 0;
+        addPart(Object.assign(local(p, 0, 1.6, z), { sx: 1.2, sy: 2.2, sz: 1.2, yaw: ang, kill: true,
+          move: { axis: 'x', amp: w / 2 - 0.8, speed: R(1.2, 1.8) * D.spin / 1.9, phase: R(0, 6.28) } }));
+      }
+    },
     strips() {
       const w = 6, d = R(16, 22);
       const p = plat(G(), w, d, R(-0.5, 0.5));
@@ -580,14 +784,14 @@ function generate(seed, stages, diff) {
   };
 
   for (let s = 1; s <= stages; s++) {
-    blk = BIOMES[(s + biomeOffset) % BIOMES.length];
+    blk = theme.biomes[(s + biomeOffset) % theme.biomes.length];
     for (let i = 0; i < D.obs; i++) {
       if (rng() < 0.55) ang = Math.max(-1, Math.min(1, ang + R(-0.6, 0.6)));
       segments[pick(D.types)]();
     }
     ang = Math.max(-1, Math.min(1, ang + R(-0.3, 0.3)));
     const final = s === stages;
-    const p = plat(G(), final ? 16 : 8, final ? 16 : 8, R(-1, 1.5), 0, { block: final ? 'gold' : 'bricks' });
+    const p = plat(G(), final ? 16 : 8, final ? 16 : 8, R(-1, 1.5), 0, { block: final ? 'gold' : theme.cp });
     const pad = addPart(Object.assign(local(p, 0, 0.6, 0), {
       sx: final ? 6 : 4, sy: 0.2, sz: final ? 6 : 4, yaw: ang, solid: false,
       block: final ? 'diamond' : 'emerald', checkpoint: s, finish: final,
@@ -595,6 +799,8 @@ function generate(seed, stages, diff) {
     const label = textSprite(final ? 'FINISH' : String(s), final ? '#ffd84a' : '#fff');
     label.position.set(pad.x, pad.y + 6, pad.z); course.add(label);
     checkpoints.push({ x: pad.x, y: pad.y + 3, z: pad.z, ang });
+    if (!final && rng() < 0.55)
+      addPart(Object.assign(local(p, 2.6, 1.7, 2.6), { sx: 1.3, sy: 1.3, sz: 1.3, yaw: ang, solid: false, power: pick(Object.keys(POWERS)) }));
     if (final) {
       addPart({ x: pad.x, y: pad.y + 3.5, z: pad.z, sx: 1.6, sy: 2.4, sz: 1.6, block: 'gold', spin: { speed: 1.5, offset: 0 }, solid: false });
     }
@@ -696,7 +902,13 @@ function buildBody(root, mats, style) {
   root.add(body);
   const pivot = (x, y, z, parent = body) => { const p = new THREE.Group(); p.position.set(x, y, z); parent.add(p); return p; };
   const joints = style === 'southpark' ? southParkRig(body, mats, pivot) : robloxRig(body, mats, pivot);
-  Object.assign(root.userData, { body, style, ...joints });
+  // shop hats sit on top of the head; the South Park head is much bigger, so they scale up
+  const hatAnchor = new THREE.Group();
+  if (style === 'southpark') { hatAnchor.position.set(0, 2.55, 0.3); hatAnchor.scale.set(3, 2.2, 2.6); }
+  else hatAnchor.position.set(0, 1.2, 0);
+  joints.head.add(hatAnchor);
+  Object.assign(root.userData, { body, style, hatAnchor, ...joints });
+  setHat(root, root.userData.hatId || 'none');
 }
 function robloxRig(body, mats, pivot) {
   const mk = (sx, sy, sz, mat, x, y, z = 0, parent = body) => {
@@ -714,8 +926,7 @@ function robloxRig(body, mats, pivot) {
   mk(0.18, 0.06, 0.02, mats.shine, -0.32, 0.83, 0.69, head);
   mk(0.18, 0.06, 0.02, mats.shine, 0.38, 0.83, 0.69, head);
   // backwards cap
-  mk(1.3, 0.45, 1.3, mats.hat, 0, 1.35, 0, head);
-  mk(1.1, 0.12, 0.7, mats.hat, 0, 1.2, -0.9, head);
+  for (const m of [mk(1.3, 0.45, 1.3, mats.hat, 0, 1.35, 0, head), mk(1.1, 0.12, 0.7, mats.hat, 0, 1.2, -0.9, head)]) m.userData.cap = true;
   const limb = (x, y, mat) => { const p = pivot(x, y, 0); mk(1, 2, 1, mat, 0, -1, 0, p); return p; };
   const legL = limb(-0.5, -0.5, mats.legs), legR = limb(0.5, -0.5, mats.legs);
   const armL = limb(-1.5, 1.5, mats.skin), armR = limb(1.5, 1.5, mats.skin);
@@ -790,6 +1001,68 @@ function southParkRig(body, mats, pivot) {
   const capeLow = pivot(0, -1.0, 0, capeTop);
   return { head, legL, legR, armL, armR, capeTop, capeLow };
 }
+// ---------- Hats (bought in the shop with coins) ----------
+const HATS = {
+  none: { name: 'No hat', icon: '🚫', price: 0 },
+  party: { name: 'Party hat', icon: '🥳', price: 25 },
+  headphones: { name: 'Headphones', icon: '🎧', price: 50 },
+  tophat: { name: 'Top hat', icon: '🎩', price: 60 },
+  horns: { name: 'Devil horns', icon: '😈', price: 80 },
+  halo: { name: 'Halo', icon: '😇', price: 80 },
+  crown: { name: 'Crown', icon: '👑', price: 120 },
+  propeller: { name: 'Propeller cap', icon: '🚁', price: 150 },
+};
+// built around (0, 0, 0) = top of the head, Roblox-head sized
+function makeHat(id, u) {
+  const g = new THREE.Group();
+  const add = (geo, color, x, y, z, extra = {}) => {
+    const m = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color, ...extra }));
+    m.position.set(x, y, z); m.castShadow = true; g.add(m); return m;
+  };
+  const box = (sx, sy, sz) => new THREE.BoxGeometry(sx, sy, sz);
+  if (id === 'party') {
+    add(new THREE.ConeGeometry(0.42, 1.1, 12), 0xff4fa3, 0, 0.55, 0);
+    add(new THREE.SphereGeometry(0.16, 10, 8), 0xffe14d, 0, 1.15, 0);
+  } else if (id === 'headphones') {
+    add(box(1.5, 0.16, 0.24), 0x222222, 0, 0.08, 0);
+    for (const sx of [-1, 1]) {
+      add(box(0.16, 0.6, 0.24), 0x222222, sx * 0.68, -0.22, 0);
+      add(box(0.26, 0.5, 0.5), 0xe11d48, sx * 0.72, -0.6, 0);
+    }
+  } else if (id === 'tophat') {
+    add(box(1.45, 0.1, 1.45), 0x111111, 0, 0.05, 0);
+    add(new THREE.CylinderGeometry(0.46, 0.46, 0.95, 16), 0x111111, 0, 0.55, 0);
+    add(new THREE.CylinderGeometry(0.47, 0.47, 0.16, 16), 0xb91c1c, 0, 0.18, 0);
+  } else if (id === 'horns') {
+    for (const sx of [-1, 1]) add(new THREE.ConeGeometry(0.15, 0.55, 8), 0xdc2626, sx * 0.4, 0.22, 0, { emissive: 0x3a0000 }).rotation.z = -sx * 0.45;
+  } else if (id === 'halo') {
+    add(new THREE.TorusGeometry(0.45, 0.07, 8, 24), 0xffe14d, 0, 0.55, 0, { emissive: 0x806a00 }).rotation.x = Math.PI / 2;
+  } else if (id === 'crown') {
+    add(new THREE.CylinderGeometry(0.6, 0.55, 0.38, 8, 1, true), 0xfacc15, 0, 0.19, 0, { emissive: 0x3a2a00, side: THREE.DoubleSide });
+    for (let i = 0; i < 8; i++) {
+      const a = i / 8 * Math.PI * 2;
+      add(new THREE.ConeGeometry(0.1, 0.32, 6), 0xfacc15, Math.sin(a) * 0.56, 0.52, Math.cos(a) * 0.56, { emissive: 0x3a2a00 });
+    }
+    add(box(0.18, 0.18, 0.06), 0xdc2626, 0, 0.2, 0.6, { emissive: 0x400000 });
+  } else if (id === 'propeller') {
+    add(new THREE.SphereGeometry(0.62, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), 0x2563eb, 0, -0.05, 0);
+    add(new THREE.CylinderGeometry(0.05, 0.05, 0.35, 6), 0x444444, 0, 0.7, 0);
+    const blades = new THREE.Group(); blades.position.y = 0.88; g.add(blades);
+    const b = new THREE.Mesh(box(1.7, 0.05, 0.2), new THREE.MeshLambertMaterial({ color: 0xfacc15 }));
+    blades.add(b);
+    u.hatSpin = blades;
+  }
+  return g;
+}
+function setHat(root, id) {
+  const u = root.userData, a = u.hatAnchor;
+  u.hatId = Object.hasOwn(HATS, id) ? id : 'none';
+  u.hatSpin = null;
+  for (const o of [...a.children]) { a.remove(o); o.traverse(m => { m.geometry?.dispose(); m.material?.dispose(); }); }
+  if (u.hatId !== 'none') a.add(makeHat(u.hatId, u));
+  u.head.traverse(o => { if (o.userData.cap) o.visible = u.hatId === 'none'; });
+}
+
 // shared unit shapes for the South Park rig (scaled per part)
 const ball = new THREE.SphereGeometry(1, 32, 20);
 const dome = new THREE.SphereGeometry(1, 32, 12, 0, Math.PI * 2, 0, Math.PI / 2);
@@ -803,10 +1076,13 @@ let savedSkin = 'classic';
 try { savedSkin = localStorage.getItem('obbySkin') || 'classic'; } catch (e) {}
 if (savedSkin === 'custom' && !customSkin) savedSkin = 'classic';
 applySkin(skinFor(savedSkin));
+let wallet = store.get('obbyWallet', 0), owned = store.get('obbyOwned', ['none']), bestTimes = store.get('obbyBest', {});
+if (!Array.isArray(owned)) owned = ['none'];
+{ const h = store.get('obbyHat', 'none'); setHat(character, owned.includes(h) ? h : 'none'); }
 
 // ---------- Particles ----------
 const particles = [], pGeo = new THREE.BoxGeometry(1, 1, 1);
-for (let i = 0; i < 220; i++) {
+for (let i = 0; i < 400; i++) {
   const m = new THREE.Mesh(pGeo, new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false }));
   m.visible = false; scene.add(m);
   particles.push({ m, life: 0, max: 1, vx: 0, vy: 0, vz: 0, g: 0, size: 1 });
@@ -844,6 +1120,25 @@ function updateParticles(dt) {
     p.m.rotation.x += dt * 4; p.m.rotation.y += dt * 3;
   }
 }
+// fireworks: rockets climb, trail sparks, then pop into a coloured burst
+const rockets = [];
+function fireworks(x, y, z, n) {
+  for (let i = 0; i < n; i++)
+    rockets.push({ x: x + (Math.random() - 0.5) * 8, y, z: z + (Math.random() - 0.5) * 8, vy: 18 + Math.random() * 8,
+      t: 0, fuse: 0.6 + Math.random() * 0.4, wait: i * 0.18, hue: Math.random() });
+}
+function updateRockets(dt) {
+  for (let i = rockets.length - 1; i >= 0; i--) {
+    const r = rockets[i];
+    if ((r.wait -= dt) > 0) continue;
+    r.t += dt; r.y += r.vy * dt; r.vy -= 12 * dt;
+    emit(r.x, r.y, r.z, tmpColor.setHSL(r.hue, 1, 0.8), 0, -2, 0, 0.3, 0.25);
+    if (r.t > r.fuse) {
+      burst(r.x, r.y, r.z, 40, 14, tmpColor.setHSL(r.hue, 1, 0.6), 1.1, 0.4, 6);
+      SFX.firework(); rockets.splice(i, 1);
+    }
+  }
+}
 // sq: squash/stretch spring (1 = rest). p: smoothed body pose values.
 const fx = {
   flip: -1, flipAxis: 'x', trailT: 0, shake: 0, fovKick: 0, stepSign: 0, idleT: 0,
@@ -855,13 +1150,14 @@ function trick() { fx.flip = 0; fx.flipAxis = Math.random() < 0.5 ? 'x' : 'y'; }
 
 // ---------- Sound (synthesized, no audio files) ----------
 let actx = null, master = null, musicGain = null, soundOn = true, musicOn = false, musicStart = 0;
+const masterLevel = () => soundOn ? 0.5 * settings.volume : 0;
 function audio() {
   if (!actx) {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return null;
     actx = new AC();
-    master = actx.createGain(); master.gain.value = 0.5; master.connect(actx.destination);
-    musicGain = actx.createGain(); musicGain.gain.value = 0.55; musicGain.connect(master);
+    master = actx.createGain(); master.gain.value = masterLevel(); master.connect(actx.destination);
+    musicGain = actx.createGain(); musicGain.gain.value = 0.55 * settings.music; musicGain.connect(master);
   }
   if (actx.state === 'suspended') actx.resume();
   return actx;
@@ -923,6 +1219,10 @@ const SFX = {
   pop: sfx(() => tone('sine', 600 + Math.random() * 600, 1400 + Math.random() * 800, 0.08, 0.08)),
   honk: sfx(() => { tone('sawtooth', 380, 360, 0.18, 0.07); tone('sawtooth', 300, 290, 0.18, 0.05); }),
   win: sfx(() => [523, 659, 784, 1047, 784, 1047].forEach((f, i) => tone('square', f, f, 0.16, 0.07, i * 0.11))),
+  coin: sfx(() => { tone('square', 988, 988, 0.07, 0.05); tone('square', 1319, 1319, 0.22, 0.05, 0.07); }),
+  power: sfx(() => [392, 523, 659, 784, 1047].forEach((f, i) => tone('triangle', f, f * 1.01, 0.12, 0.09, i * 0.05))),
+  beep: sfx(hi => tone('square', hi ? 880 : 440, hi ? 880 : 440, hi ? 0.4 : 0.15, 0.08)),
+  firework: sfx(() => { noiseHit(0.5, 0.12, 2500, 0, 'highpass'); tone('sine', 220, 70, 0.3, 0.12); }),
 };
 
 // funky loop: 120 BPM, 2 bars of 16th notes; bass steps are semitones above E2
@@ -949,22 +1249,121 @@ function setMusic(on) {
   }
 }
 
-// ---------- Idle song: plays while standing still ----------
+// ---------- Idle songs: made in code, play while standing still ----------
 const IDLE_VOL = 0.8;
-// one song per character style. beats: [time, strength, ...] of every beat, tracked from
-// the audio itself so the idle dance snaps exactly on the hits (strength 1 = a full hit)
-const IDLE_SONGS = {
-  roblox: { audio: new Audio('idle.mp3'), beats: [0.404, 0.58, 0.848, 0.99, 1.292, 1.00, 1.736, 0.94, 2.185, 0.64, 2.624, 0.95, 3.068, 0.98, 3.517, 1.00, 3.961, 0.66, 4.405, 1.00, 4.849, 0.97, 5.293, 0.99, 5.737, 0.56, 6.181, 1.00, 6.625, 1.00, 7.079, 0.30, 7.518, 0.63, 7.957, 0.90, 8.401, 0.96, 8.845, 0.99, 9.294, 0.62, 9.738, 1.00, 10.177, 0.98, 10.626, 0.99, 11.070, 0.56, 11.514, 1.00, 11.958, 0.95, 12.402, 1.00, 12.851, 0.64, 13.295, 1.00] },
-  southpark: { audio: new Audio('idle-southpark.mp3'), beats: [0.075, 1.00, 0.574, 0.41, 1.008, 0.30, 1.407, 0.42, 1.846, 0.49, 2.290, 0.65, 2.729, 0.61, 3.173, 0.74, 3.612, 0.92, 4.056, 0.80, 4.495, 1.00, 4.934, 0.85, 5.378, 0.85, 5.817, 0.86, 6.261, 0.95, 6.700, 0.93, 7.144, 1.00, 7.583, 1.00, 8.022, 1.00, 8.466, 1.00, 8.905, 0.77, 9.349, 0.93, 9.788, 0.98, 10.232, 1.00, 10.671, 0.91, 11.115, 0.89, 11.554, 1.00, 11.993, 0.95, 12.437, 0.86, 12.876, 1.00, 13.320, 1.00, 13.759, 0.95] },
-};
-for (const { audio } of Object.values(IDLE_SONGS)) Object.assign(audio, { loop: true, preload: 'auto', volume: 0 });
+// A song is a loop of 16th-note steps: play(i, t, out) schedules step i at time t, and
+// accent(beat) says how hard each beat hits (drives how hard the idle dance snaps), and
+// level evens out loudness between songs.
+// Its .audio acts like an <audio> element so the fade / duck / dance code can drive it.
+function synthSong({ bpm, steps, play, accent, level }) {
+  const step = 60 / bpm / 4, len = steps * step, beats = [];
+  for (let b = 0; b < steps / 4; b++) beats.push(+(b * step * 4).toFixed(3), accent(b));
+  let gain = null, vol = 0, timer = null, start = 0, next = 0, idx = 0;
+  const audio = {
+    paused: true,
+    get volume() { return vol; },
+    set volume(v) { vol = v; if (gain) gain.gain.value = v * level; },
+    get currentTime() { return audio.paused ? 0 : ((actx.currentTime - start) % len + len) % len; },
+    set currentTime(v) {},   // every play starts from the top
+    play() {
+      if (audio.paused && actx) {
+        if (!gain) { gain = actx.createGain(); gain.connect(master); }
+        gain.gain.value = vol * level;
+        audio.paused = false; start = next = actx.currentTime + 0.05; idx = 0;
+        timer = setInterval(() => {
+          while (next < actx.currentTime + 0.12) { play(idx % steps, next, gain); idx++; next += step; }
+        }, 25);
+      }
+      return Promise.resolve();
+    },
+    pause() { audio.paused = true; clearInterval(timer); },
+  };
+  return { audio, beats, steps, step, play, level };
+}
+// instruments for the idle songs, scheduled at an absolute time t
+const at = t => Math.max(0, t - actx.currentTime);
+const note = (root, semis) => root * 2 ** (semis / 12);
+const kick = (t, out, v = 0.55) => tone('sine', 170, 45, 0.16, v, at(t), out);
+const clap = (t, out, v = 0.3) => { noiseHit(0.1, v, 1400, at(t), 'bandpass', out); noiseHit(0.12, v * 0.8, 1300, at(t + 0.012), 'bandpass', out); };
+const hat = (t, out, v = 0.05) => noiseHit(0.03, v, 7500, at(t), 'highpass', out);
+// 808-style sub: a sine that drops into the note, plus an octave-up triangle so the
+// bass still comes through on laptop and phone speakers
+function sub(f, t, dur, v, out) {
+  const s = actx.createOscillator(), g = actx.createGain(), T = t;
+  s.type = 'sine'; s.frequency.setValueAtTime(f * 1.5, T); s.frequency.exponentialRampToValueAtTime(f, T + 0.04);
+  g.gain.setValueAtTime(0.0001, T); g.gain.exponentialRampToValueAtTime(v, T + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, T + dur);
+  s.connect(g).connect(out); s.start(T); s.stop(T + dur + 0.02);
+  tone('triangle', f * 2, f * 2, dur * 0.8, v * 0.35, at(t), out);
+}
+// pitched cowbell: two detuned squares through a bandpass, short and clanky
+function bell(f, t, v, out) {
+  const bp = actx.createBiquadFilter(), g = actx.createGain();
+  bp.type = 'bandpass'; bp.frequency.value = f * 1.3; bp.Q.value = 1.4;
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(v, t + 0.004); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.28);
+  for (const m of [1, 1.48]) {
+    const o = actx.createOscillator(); o.type = 'square'; o.frequency.value = f * m;
+    o.connect(bp); o.start(t); o.stop(t + 0.3);
+  }
+  bp.connect(g).connect(out);
+}
+
+// Blocky: chill chiptune funk, 126 BPM in A minor, Am - F - C - G two bars each
+const BLOCKY_CHORDS = [[0, 'm'], [-4, 'M'], [-9, 'M'], [-2, 'M']];   // semitones from A2
+const BLOCKY_BASS = [0, null, 12, null, null, 0, null, 12, null, 0, null, 7, 12, null, 7, null];
+const BLOCKY_ARP = [0, null, 1, 2, null, 3, 2, null, 1, null, 2, 3, null, 2, 1, null];
+const blockySong = synthSong({
+  bpm: 126, steps: 128, level: 2.6,
+  accent: b => [1, 0.6, 0.85, 0.6][b % 4],
+  play(i, t, out) {
+    const bar = i >> 4, s = i % 16, [root, q] = BLOCKY_CHORDS[bar >> 1];
+    if (s === 0 || s === 8 || (s === 6 && bar % 2)) kick(t, out, s === 6 ? 0.35 : 0.5);
+    if (s === 4 || s === 12) clap(t, out, 0.22);
+    if (s % 2 === 0) hat(t, out, s % 4 === 2 ? 0.06 : 0.03);
+    const bs = BLOCKY_BASS[s];
+    if (bs !== null) { const f = note(110, root + bs); tone('square', f, f, 0.16, 0.05, at(t), out); }
+    // chord-tone arpeggio lead; the last bar climbs an octave into the loop
+    const ai = BLOCKY_ARP[s];
+    if (ai !== null) {
+      const tones = q === 'm' ? [0, 3, 7, 12] : [0, 4, 7, 12];
+      const f = note(440, root + tones[ai] + (bar === 7 && s > 7 ? 12 : 0));
+      tone('square', f, f * 0.995, 0.13, 0.025, at(t), out);
+    }
+    // soft offbeat chord stabs
+    if (s % 4 === 2) for (const n of (q === 'm' ? [3, 7] : [4, 7])) { const f = note(220, root + n); tone('triangle', f, f, 0.1, 0.03, at(t), out); }
+  },
+});
+
+// Paper Cutout: bouncy bass-boosted cartoon phonk, 136 BPM in G# minor. A deep 808 hits on
+// every beat and a higher bass note bounces in between, with cowbell and a cartoon boing
+const PAPER_ROOTS = [0, -4, 5, 7];                   // G#m - E - C#m - D#, semitones from G#1
+const PAPER_BOUNCE = [12, 15, 19, 22];               // off-beat bass notes above the root
+const PAPER_BELL = [[0, 7], [3, 10], [6, 12], [8, 15], [11, 10], [14, 7]];   // [step, semis above G#4]
+const paperSong = synthSong({
+  bpm: 136, steps: 128, level: 1.9,
+  accent: b => b % 16 === 15 ? 1 : [1, 0.75, 0.9, 0.75][b % 4],
+  play(i, t, out) {
+    const bar = i >> 4, s = i % 16, root = PAPER_ROOTS[bar >> 1], G = 51.91;
+    if (s % 4 === 0) { kick(t, out, 0.45); sub(note(G, root), t, 0.3, 0.55, out); }
+    if (s % 4 === 2) sub(note(G, root + PAPER_BOUNCE[(s >> 2) % 4]), t, 0.16, 0.4, out);
+    if (s === 4 || s === 12) clap(t, out, 0.3);
+    // 16th hats, rolling into the loop on the last half bar
+    hat(t, out, s % 2 ? 0.025 : 0.05);
+    if (bar === 7 && s >= 12) hat(t + 60 / 136 / 8, out, 0.04);
+    for (const [bs, n] of PAPER_BELL) if (bs === s && bar % 4 !== 3) bell(note(415.3, n + (bar % 2 ? -2 : 0)), t, 0.05, out);
+    // goofy boing to close every four bars
+    if (bar % 4 === 3 && s === 12) tone('triangle', 180, 620, 0.3, 0.12, at(t), out);
+  },
+});
+
+// one song per character style
+const IDLE_SONGS = { roblox: blockySong, southpark: paperSong };
 let idle = IDLE_SONGS[myStyle];
 function setIdleSong(style) {
   const next = IDLE_SONGS[style];
   if (next === idle) return;
   // hand over mid-song at the same loudness, starting the new one from the top
-  next.audio.volume = idle.audio.volume; next.audio.currentTime = 0;
-  if (!idle.audio.paused) { idle.audio.pause(); next.audio.play().catch(() => {}); }
+  next.audio.volume = idle.audio.volume;
+  if (!idle.audio.paused) { idle.audio.pause(); next.audio.play(); }
   idle.audio.volume = 0;
   idle = next;
 }
@@ -979,7 +1378,7 @@ function updateIdleSong(dt, still) {
   idle.audio.volume = Math.min(1, Math.max(0, idle.audio.volume + Math.max(-rate * dt, Math.min(rate * dt, target - idle.audio.volume))));
   if (!want && idle.audio.volume === 0 && !idle.audio.paused) idle.audio.pause();
   // duck the beat underneath the song
-  if (musicGain) musicGain.gain.value = 0.55 * (1 - idle.audio.volume / IDLE_VOL);
+  if (musicGain) musicGain.gain.value = 0.55 * settings.music * (1 - idle.audio.volume / IDLE_VOL);
 }
 
 // ---------- Meme popups ----------
@@ -992,6 +1391,7 @@ const MEMES = {
   boom: ['💥 KABOOM 💥', 'touch grass', 'too much aura 💥', 'calm down 😭'],
 };
 function meme(kind) {
+  if (!settings.memes) return;
   const el = document.createElement('div');
   el.className = 'meme';
   el.textContent = rand(MEMES[kind]);
@@ -1079,7 +1479,9 @@ function playEmote(i) {
 
 const PR = 0.9, PH = 2.5;               // player half-width, half-height
 const SPEED = 16, JUMP = 22, GRAV = 60, BOUNCE = 37;
-const pl = { x: 0, y: 3, z: 0, vx: 0, vy: 0, vz: 0, facing: 0, ground: null, grounded: false, airJumps: 1 };
+const pl = { x: 0, y: 3, z: 0, vx: 0, vy: 0, vz: 0, facing: 0, ground: null, grounded: false, airJumps: 1, power: null, invuln: 0 };
+const CONVEYOR_TILE = 2;   // world units per conveyor texture repeat
+let runCoins = 0;
 let jumpQueued = false;
 let cpIndex = 0, deaths = 0, elapsed = 0, running = false, finished = false, walkPhase = 0;
 
@@ -1088,8 +1490,23 @@ function respawn() {
   Object.assign(pl, { x: cp.x, y: cp.y, z: cp.z, vx: 0, vy: 0, vz: 0, ground: null, grounded: false, facing: cp.ang });
   camYaw = cp.ang + Math.PI;
   emote = null;
+  pl.invuln = 0;
 }
-function die() {
+// grab a power-up: replaces whatever power you had
+function givePower(type) {
+  const P = POWERS[type];
+  pl.power = { type, t: P.dur };
+  burst(pl.x, pl.y, pl.z, 24, 10, tmpColor.setHex(P.color), 0.7, 0.5, 5);
+  flashText(`${P.icon} ${P.name}!`); SFX.power(); fx.sq.v += 8;
+}
+function die(cause) {
+  // a shield eats one hit from lava or magma and pops you up out of it
+  if (cause === 'kill' && pl.power?.type === 'shield') {
+    pl.power = null; pl.invuln = 1; pl.vy = JUMP * 1.1; pl.grounded = false;
+    burst(pl.x, pl.y, pl.z, 30, 12, tmpColor.setHex(POWERS.shield.color), 0.8, 0.5, 10);
+    flashText('🛡️ Shield saved you!'); SFX.boing(); fx.shake = 0.6;
+    return;
+  }
   deaths++;
   // break apart into skin-colored blocks
   for (const c of [currentSkin.torso, currentSkin.skin, currentSkin.legs, currentSkin.cape])
@@ -1112,13 +1529,20 @@ function collide(p) {
   let lx = dx * c - dz * s, lz = dx * s + dz * c;
   const ox = p.hx + PR - Math.abs(lx), oy = p.hy + PH - Math.abs(dy), oz = p.hz + PR - Math.abs(lz);
   if (ox <= 0 || oy <= 0 || oz <= 0) return false;
-  if (p.kill) { die(); return true; }
+  if (p.kill) {
+    if (pl.invuln > 0) return false;
+    die('kill'); return true;
+  }
+  if (p.power) {
+    if (!p.cool) { givePower(p.power); p.cool = 10; p.mesh.visible = false; }
+    return false;
+  }
   if (p.checkpoint !== undefined) {
     if (p.checkpoint > cpIndex) {
       cpIndex = p.checkpoint;
       p.mesh.material[2].emissive.setHex(0x1f8a3f);
       burst(p.x, p.y + 1, p.z, 30, 12, tmpColor.set(0x4ade80), 0.9, 0.5, 15);
-      if (!p.finish) { SFX.ding(); meme('checkpoint'); trick(); }
+      if (!p.finish) { SFX.ding(); meme('checkpoint'); trick(); fireworks(p.x, p.y + 2, p.z, 3); }
       flashText(p.finish ? '' : `Checkpoint ${p.checkpoint}!`);
       if (!p.finish) mpEvent({ t: 'cp', n: p.checkpoint });
     }
@@ -1155,8 +1579,8 @@ const cvs = renderer.domElement;
 cvs.addEventListener('click', () => { if (matchMedia('(pointer: fine)').matches) cvs.requestPointerLock(); });
 addEventListener('mousemove', e => {
   if (document.pointerLockElement !== cvs) return;
-  camYaw -= e.movementX * 0.004;
-  camPitch = Math.max(-0.3, Math.min(1.35, camPitch + e.movementY * 0.004));
+  camYaw -= e.movementX * 0.004 * settings.sens;
+  camPitch = Math.max(-0.3, Math.min(1.35, camPitch + e.movementY * 0.004 * settings.sens));
 });
 addEventListener('wheel', e => { camDist = Math.max(6, Math.min(45, camDist + e.deltaY * 0.02)); }, { passive: true });
 
@@ -1173,8 +1597,8 @@ cvs.addEventListener('touchmove', e => {
       const dx = t.clientX - s.sx, dy = t.clientY - s.sy, m = Math.max(1, Math.hypot(dx, dy) / 50);
       touchMove = { x: dx / 50 / m, y: dy / 50 / m };
     } else {
-      camYaw -= (t.clientX - s.lx) * 0.008;
-      camPitch = Math.max(-0.3, Math.min(1.35, camPitch + (t.clientY - s.ly) * 0.008));
+      camYaw -= (t.clientX - s.lx) * 0.008 * settings.sens;
+      camPitch = Math.max(-0.3, Math.min(1.35, camPitch + (t.clientY - s.ly) * 0.008 * settings.sens));
     }
     s.lx = t.clientX; s.ly = t.clientY;
   }
@@ -1202,6 +1626,11 @@ function updateDynamics(h) {
       p.mesh.position.set(nx, ny, nz);
     }
     if (p.spin) { p.yaw = simTime * p.spin.speed + p.spin.offset; p.mesh.rotation.y = p.yaw; }
+    if (p.power) {
+      p.mesh.rotation.y += h * 2; p.mesh.rotation.x += h * 1.3;
+      p.mesh.position.y = p.y + Math.sin(simTime * 3) * 0.3;
+      if (p.cool > 0 && (p.cool -= h) <= 0) { p.mesh.visible = true; burst(p.x, p.y, p.z, 12, 6, tmpColor.setHex(POWERS[p.power].color), 0.5, 0.4, 0); }
+    }
     if (p.vanish && p.timer !== undefined) {
       p.timer += h;
       if (p.timer < 0.6) p.mesh.material.opacity = 1 - 0.85 * p.timer / 0.6;
@@ -1214,20 +1643,29 @@ function updateDynamics(h) {
 function stepPlayer(h) {
   let ix = (keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0) + touchMove.x;
   let iz = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0) - touchMove.y;
+  // nobody moves before the race says GO
+  const frozen = race && performance.now() < race.at;
+  if (frozen) { ix = iz = 0; jumpQueued = false; }
   const im = Math.hypot(ix, iz);
   if (im > 1) { ix /= im; iz /= im; }
   // camera-relative directions
   const cfx = -Math.sin(camYaw), cfz = -Math.cos(camYaw), rx = Math.cos(camYaw), rz = -Math.sin(camYaw);
   const mx = cfx * iz + rx * ix, mz = cfz * iz + rz * ix;
-  pl.vx = mx * SPEED; pl.vz = mz * SPEED;
+  const pw = pl.power?.type, speed = SPEED * (pw === 'speed' ? 1.6 : 1), jump = JUMP * (pw === 'jump' ? 1.35 : 1);
+  if (pl.ground?.ice) {
+    // ice: you keep sliding and only slowly steer
+    const k = Math.min(1, h * 2.2);
+    pl.vx += (mx * speed - pl.vx) * k; pl.vz += (mz * speed - pl.vz) * k;
+  } else { pl.vx = mx * speed; pl.vz = mz * speed; }
+  pl.invuln = Math.max(0, pl.invuln - h);
   if (im > 0.1) { pl.facing = Math.atan2(mx, mz); if (!running && !finished) running = true; }
 
-  if ((keys.Space || touchJump) && pl.grounded) {
-    pl.vy = JUMP; pl.grounded = false;
+  if (!frozen && (keys.Space || touchJump) && pl.grounded) {
+    pl.vy = jump; pl.grounded = false;
     burst(pl.x, pl.y - PH, pl.z, 6, 5, tmpColor.set(0xffffff), 0.4, 0.4, 0);
     SFX.jump(); fx.sq.v += 9;
   } else if (jumpQueued && !pl.grounded && pl.airJumps > 0) {
-    pl.vy = JUMP * 0.95; pl.airJumps--;
+    pl.vy = jump * 0.95; pl.airJumps--;
     trick(); fx.sq.v += 10; fx.fovKick = 1; SFX.double();
     if (Math.random() < 0.35) meme('air');
     for (let i = 0; i < 18; i++) {
@@ -1241,12 +1679,14 @@ function stepPlayer(h) {
 
   const g = pl.ground;
   if (g && g.move) { pl.x += g.dx; pl.y += g.dy; pl.z += g.dz; }
+  // conveyor pushes along its local +x
+  if (g && g.conveyor) { pl.x += Math.cos(g.yaw) * g.conveyor * h; pl.z -= Math.sin(g.yaw) * g.conveyor * h; }
   pl.x += pl.vx * h; pl.y += pl.vy * h; pl.z += pl.vz * h;
 
   pl.grounded = false; pl.ground = null;
   for (const p of parts) if (collide(p)) return;
   const gr = pl.ground;
-  if (gr) pl.airJumps = 1;
+  if (gr) pl.airJumps = pw === 'jump' ? 2 : 1;
   if (gr && !wasGrounded && preVy < -5 && !gr.bounce) {
     // jelly squash scaled by impact
     const k = Math.min(1, -preVy / 50);
@@ -1264,6 +1704,11 @@ function stepPlayer(h) {
     burst(pl.x, pl.y - PH, pl.z, 24, 12, null, 0.8, 0.5, 10);
   }
   if (gr && gr.vanish && gr.timer === undefined) gr.timer = 0;
+  for (const c of coins) {
+    if (c.got || Math.abs(pl.y - c.y) > 2.6 || (pl.x - c.x) ** 2 + (pl.z - c.z) ** 2 > 2.2) continue;
+    c.got = true; c.mesh.visible = false; runCoins++;
+    burst(c.x, c.y, c.z, 10, 6, tmpColor.set(0xffd84a), 0.5, 0.35, 8); SFX.coin();
+  }
   if (pl.y < minY - 30) die();
 }
 
@@ -1283,28 +1728,99 @@ function flashText(t) {
 }
 function win() {
   finished = true; running = false;
-  mpEvent({ t: 'win', time: elapsed });
-  SFX.win(); trick();
+  let place = 0;
+  if (race && !race.done && performance.now() >= race.at) {
+    race.done = true; race.results.push({ name: myName, time: elapsed }); place = race.results.length;
+  }
+  mpEvent({ t: 'win', time: elapsed, race: place ? race.id : undefined });
+  SFX.win(); trick(); fireworks(pl.x, pl.y, pl.z, 10);
   for (let i = 0; i < 3; i++) setTimeout(() => meme('win'), i * 250);
-  $('winStats').textContent = `Time: ${elapsed.toFixed(1)}s · Deaths: ${deaths} · Seed: "${$('seed').value}"`;
+  // bank the coins grabbed on the way plus a finish bonus, and check the best time
+  const bonus = 5 + Math.floor(totalStages / 2), earned = runCoins + bonus;
+  wallet += earned; store.set('obbyWallet', wallet);
+  const prev = bestTimes[courseKey], newBest = !(prev <= elapsed);
+  if (newBest) { bestTimes[courseKey] = +elapsed.toFixed(2); store.set('obbyBest', bestTimes); saveGhost(); }
+  $('winStats').innerHTML = `Time: ${elapsed.toFixed(1)}s · Deaths: ${deaths}<br>` +
+    (newBest ? '🏆 New best time!' : `Best: ${prev.toFixed(1)}s`) +
+    `<br>🪙 +${earned} coins <span style="color:#a8a8a8">(${runCoins} grabbed + ${bonus} finish bonus)</span>` +
+    (place ? `<br>🏁 Race: ${placeText(place)} place!` : '');
   $('win').style.display = 'flex';
   document.exitPointerLock?.();
 }
 function start() {
   const seed = $('seed').value.trim() || 'obby';
   const stages = Math.max(3, Math.min(60, parseInt($('stages').value) || 12));
-  const diff = $('diff').value;
+  const diff = $('diff').value, pick = $('world').value, world = worldFor(seed, pick);
   $('stages').value = stages;
-  generate(seed, stages, diff);
-  history.replaceState(null, '', `#seed=${encodeURIComponent(seed)}&n=${stages}&d=${diff}`);
-  mpJoin(`${seed}|${stages}|${diff}`);
-  cpIndex = 0; deaths = 0; elapsed = 0; running = false; finished = false; simTime = 0;
+  generate(seed, stages, diff, world);
+  history.replaceState(null, '', `#seed=${encodeURIComponent(seed)}&n=${stages}&d=${diff}${pick === 'auto' ? '' : '&w=' + pick}`);
+  courseKey = `${seed}|${stages}|${diff}|${world}`;
+  mpJoin(courseKey);
+  cpIndex = 0; deaths = 0; elapsed = 0; running = false; finished = false; simTime = 0; runCoins = 0; pl.power = null;
+  race = null;
   $('win').style.display = 'none';
   $('total').textContent = stages;
-  respawn();
+  respawn(); ghostReset();
 }
+let courseKey = '';
 const randomSeed = () => Math.random().toString(36).slice(2, 8);
+$('world').add(new Option('🎲 From seed', 'auto'));
+for (const [k, th] of Object.entries(THEMES)) $('world').add(new Option(th.name, k));
 $('genBtn').onclick = start;
+// daily challenge: same course for everyone today, so it doubles as a meeting place
+$('dailyBtn').onclick = e => {
+  const day = new Date().toISOString().slice(0, 10);
+  $('seed').value = 'daily-' + day; $('stages').value = 15; $('diff').value = 'normal'; $('world').value = 'auto';
+  start(); flashText(`📅 Daily challenge ${day}`); e.target.blur();
+};
+// any .modal closes from its Close button or by clicking the dimmed background
+for (const m of document.querySelectorAll('.modal')) m.addEventListener('click', e => {
+  if (e.target === m || e.target.classList.contains('close')) m.classList.remove('open');
+});
+function renderShop() {
+  $('shopWallet').textContent = wallet;
+  const box = $('shopItems'); box.innerHTML = '';
+  const cur = character.userData.hatId;
+  for (const [id, h] of Object.entries(HATS)) {
+    const have = owned.includes(id), on = cur === id;
+    const d = document.createElement('div'); d.className = 'item' + (on ? ' on' : '');
+    d.innerHTML = `<div class="ic">${h.icon}</div>${esc(h.name)}<br><span style="color:#ffff55">${h.price ? '🪙 ' + h.price : 'free'}</span>`;
+    const b = document.createElement('button');
+    b.textContent = on ? 'Wearing' : have ? 'Wear' : 'Buy';
+    if (!have) b.className = 'primary';
+    b.disabled = on || (!have && wallet < h.price);
+    b.onclick = () => {
+      if (!have) { wallet -= h.price; owned.push(id); store.set('obbyWallet', wallet); store.set('obbyOwned', owned); SFX.coin(); }
+      setHat(character, id); store.set('obbyHat', id); mpHello();
+      burst(pl.x, pl.y + 2, pl.z, 20, 8, null, 0.7, 0.4, 8);
+      renderShop();
+    };
+    d.appendChild(b); box.appendChild(d);
+  }
+}
+$('shopBtn').onclick = e => { renderShop(); $('shop').classList.add('open'); document.exitPointerLock?.(); e.target.blur(); };
+// settings: sliders and checkboxes write straight into settings and are saved
+function applySettings() {
+  if (master) master.gain.value = masterLevel();
+  sun.castShadow = settings.shadows;
+  store.set('obbySettings', settings);
+}
+for (const k of Object.keys(settings)) {
+  const el = $('s_' + k);
+  if (!el) continue;
+  if (el.type === 'checkbox') { el.checked = settings[k]; el.onchange = () => { settings[k] = el.checked; applySettings(); }; }
+  else { el.value = settings[k]; el.oninput = () => { settings[k] = +el.value; applySettings(); }; }
+}
+applySettings();
+$('setBtn').onclick = e => { $('settingsM').classList.add('open'); document.exitPointerLock?.(); e.target.blur(); };
+// title screen: the game runs behind it, so your character is already dancing
+const closeTitle = () => { $('title').classList.remove('open'); document.body.classList.remove('title-open'); };
+// clicking the dimmed background also closes it (the generic .modal handler), so watch for that too
+new MutationObserver(() => { if (!$('title').classList.contains('open')) closeTitle(); }).observe($('title'), { attributes: true });
+$('playBtn').onclick = closeTitle;
+$('tDaily').onclick = () => { closeTitle(); $('dailyBtn').click(); };
+$('tShop').onclick = () => $('shopBtn').click();
+$('tSet').onclick = () => $('setBtn').click();
 $('randBtn').onclick = () => { $('seed').value = randomSeed(); start(); };
 $('skipBtn').onclick = () => { if (cpIndex < checkpoints.length - 2) { cpIndex++; respawn(); } };
 $('linkBtn').onclick = () => { navigator.clipboard?.writeText(location.href); flashText('Link copied! Send it to friends'); };
@@ -1332,6 +1848,7 @@ $('styleSel').value = myStyle;
 $('styleSel').onchange = e => {
   myStyle = e.target.value;
   buildBody(character, mats, myStyle);
+  buildBody(ghost.char, ghostMats, myStyle); ghost.char.traverse(o => { o.castShadow = false; });
   setIdleSong(myStyle);
   try { localStorage.setItem('obbyStyle', myStyle); } catch (err) {}
   mpHello();
@@ -1381,7 +1898,7 @@ EMOTES.forEach((em, i) => {
 }
 $('soundBtn').onclick = e => {
   soundOn = !soundOn;
-  if (master) master.gain.value = soundOn ? 0.5 : 0;
+  if (master) master.gain.value = masterLevel();
   e.target.textContent = soundOn ? '🔊 Sound' : '🔇 Muted';
   e.target.blur();
 };
@@ -1425,7 +1942,7 @@ function cleanSkin(s) {
   for (const k of PARTS) out[k] = Number.isInteger(s?.[k]) ? s[k] & 0xffffff : 0x888888;
   return out;
 }
-const hello = () => ({ name: myName, skin: cleanSkin(currentSkin), style: myStyle });
+const hello = () => ({ name: myName, skin: cleanSkin(currentSkin), style: myStyle, hat: character.userData.hatId });
 
 // pixel-font label with a dark Minecraft-style nameplate
 function labelSprite(text, color, bg, h = 1) {
@@ -1532,6 +2049,8 @@ async function mpJoin(course) {
     p.skin = cleanSkin(d?.skin); paintMats(p.mats, p.skin);
     const style = cleanStyle(d?.style);
     if (style !== p.char.userData.style) buildBody(p.char, p.mats, style);
+    const hat = Object.hasOwn(HATS, d?.hat) ? d.hat : 'none';
+    if (hat !== p.char.userData.hatId) setHat(p.char, hat);
     onlineText();
   };
   mp.st.onMessage = (d, { peerId }) => {
@@ -1553,8 +2072,13 @@ async function mpJoin(course) {
       p.cur = null;   // snap to their respawn point
     } else if (d.t === 'cp' && Number.isInteger(d.n)) {
       sysLine(`${p.name} reached checkpoint ${d.n}`);
+    } else if (d.t === 'race' && typeof d.id === 'string' && d.id.length <= 12 && Number.isFinite(d.in) && d.in >= 1000 && d.in <= 10000) {
+      startRace(d.id, d.in, p.name);
     } else if (d.t === 'win' && Number.isFinite(d.time)) {
-      sysLine(`🏆 ${p.name} finished in ${d.time.toFixed(1)}s!`);
+      if (race && d.race === race.id) {
+        race.results.push({ name: p.name, time: d.time });
+        sysLine(`🏁 ${p.name} finished ${placeText(race.results.length)} in ${d.time.toFixed(1)}s!`);
+      } else sysLine(`🏆 ${p.name} finished in ${d.time.toFixed(1)}s!`);
       burst(x, y, z, 40, 16, tmpColor.set(0xffd84a), 1.2, 0.6, 10);
     } else if (d.t === 'chat' && typeof d.text === 'string') {
       const text = d.text.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 80);
@@ -1651,11 +2175,88 @@ function updatePeers(dt) {
   }
 }
 
+// ---------- Races ----------
+// Anyone can start a race: everyone on the course restarts at the top, waits for the
+// countdown, and finishers are ranked in the order their wins arrive.
+let race = null;   // { id, at: performance.now() of GO, results, done, beep }
+const placeText = n => ['🥇 1st', '🥈 2nd', '🥉 3rd'][n - 1] || `${n}th`;
+function startRace(id, inMs, by) {
+  if (race?.id === id) return;
+  if (race && !race.done && performance.now() < race.at + 3000) return;   // one at a time
+  race = { id, at: performance.now() + inMs, results: [], done: false, beep: null };
+  cpIndex = 0; deaths = 0; elapsed = 0; running = false; finished = false; runCoins = 0; pl.power = null;
+  for (const c of coins) { c.got = false; c.mesh.visible = true; }
+  $('win').style.display = 'none';
+  respawn(); ghostReset();
+  sysLine(by ? `🏁 ${by} started a race!` : mp.peers.size ? '🏁 Race starting!' : '🏁 Solo race (no one else on this course)');
+}
+$('raceBtn').onclick = e => {
+  const id = Math.random().toString(36).slice(2, 10);
+  startRace(id, 5000); mpEvent({ t: 'race', id, in: 5000 });
+  e.target.blur();
+};
+function updateRace() {
+  const el = $('countdown');
+  if (!race) { el.style.display = 'none'; return; }
+  const left = (race.at - performance.now()) / 1000;
+  if (left > 0) {
+    const n = Math.ceil(left);
+    el.textContent = n > 3 ? 'GET READY' : n; el.style.display = 'block';
+    if (n <= 3 && n !== race.beep) { race.beep = n; SFX.beep(false); }
+  } else if (left > -0.8) {
+    el.textContent = 'GO!'; el.style.display = 'block';
+    if (race.beep !== 0) { race.beep = 0; SFX.beep(true); running = true; }
+  } else el.style.display = 'none';
+}
+
+// ---------- Ghost of your best run ----------
+// Your pose is recorded 10 times a second; a new best time saves it, and next time a
+// see-through copy replays it so you can race yourself.
+const ghostMats = makeMats();
+paintMats(ghostMats, { skin: 0xbfe9ff, torso: 0xbfe9ff, legs: 0xbfe9ff, cape: 0xbfe9ff, hat: 0xbfe9ff, glow: 0.6 });
+for (const m of [...Object.values(ghostMats), ...Object.values(ghostMats.flat)])
+  if (m.isMaterial) Object.assign(m, { transparent: true, opacity: 0.35, depthWrite: false });
+const ghost = { char: makeCharacter(ghostMats, myStyle), rec: [], recT: 0, data: null };
+ghost.char.visible = false;
+ghost.char.traverse(o => { o.castShadow = false; });
+scene.add(ghost.char);
+setTag(ghost.char, '👻 your best');
+const GHOST_RATE = 0.1, GHOST_MAX = 3000;
+function ghostReset() {
+  ghost.rec = []; ghost.recT = 0;
+  const d = store.get('obbyGhost:' + courseKey, null);
+  ghost.data = Array.isArray(d?.s) && d.s.length && d.s.every(a => Array.isArray(a) && a.length === 21) ? d : null;
+}
+function saveGhost() {
+  if (!ghost.rec.length || ghost.rec.length >= GHOST_MAX) return;
+  const key = 'obbyGhost:' + courseKey;
+  // keep ghosts for the last few courses only
+  const keys = store.get('obbyGhosts', []).filter(k => k !== key);
+  keys.push(key);
+  while (keys.length > 6) { try { localStorage.removeItem(keys.shift()); } catch (e) {} }
+  store.set(key, { s: ghost.rec }); store.set('obbyGhosts', keys);
+  ghost.data = { s: ghost.rec };
+}
+function updateGhost(dt) {
+  if (running && !finished && ghost.rec.length < GHOST_MAX && (ghost.recT -= dt) <= 0) {
+    ghost.recT += GHOST_RATE;
+    ghost.rec.push(packState().slice(0, 21));
+  }
+  const gd = ghost.data, show = settings.ghost && gd && running && !finished;
+  ghost.char.visible = !!show;
+  if (!show) return;
+  const f = Math.min(elapsed / GHOST_RATE, gd.s.length - 1), i = Math.floor(f), k = f - i;
+  const a = gd.s[i], b = gd.s[Math.min(i + 1, gd.s.length - 1)];
+  applyState(ghost.char, a.map((v, j) => v + (ANGLES.includes(j) ? wrapA(b[j] - v) : b[j] - v) * k));
+}
+
 // load from URL
 const params = new URLSearchParams(location.hash.slice(1));
 if (params.get('seed')) $('seed').value = params.get('seed');
 if (params.get('n')) $('stages').value = params.get('n');
 if (['easy', 'normal', 'hard'].includes(params.get('d'))) $('diff').value = params.get('d');
+$('world').value = Object.hasOwn(THEMES, params.get('w')) ? params.get('w') : 'auto';
+$('world').onchange = e => { start(); e.target.blur(); };
 if (innerWidth <= 640) $('gen').classList.add('collapsed');
 start();
 
@@ -1663,9 +2264,9 @@ start();
 const camTarget = new THREE.Vector3(pl.x, pl.y, pl.z);
 let last = performance.now();
 function frame(now) {
-  const dt = Math.min((now - last) / 1000, 1 / 20);
+  const dt = Math.max(0, Math.min((now - last) / 1000, 1 / 20));   // first frame's timestamp can predate `last`
   last = now;
-  const n = Math.ceil(dt / (1 / 120)), h = dt / n;
+  const n = Math.max(1, Math.ceil(dt / (1 / 120))), h = dt / n;
   for (let i = 0; i < n; i++) { updateDynamics(h); stepPlayer(h); }
   if (running) elapsed += dt;
 
@@ -1808,6 +2409,11 @@ function frame(now) {
     emit(pl.x + r(), pl.y - (pl.grounded ? 2.2 : 0.5) + r(), pl.z + r(), trailColor(), r(), 1 + Math.random() * 2, r(), 0.6, 0.45);
   }
   updatePeers(dt);
+  updateRace(); updateGhost(dt); updateRockets(dt);
+  // speed lines when you're flung, falling fast or boosted
+  const lines = settings.speedLines ? Math.min(1, fx.fovKick * 0.8 + Math.max(0, -pl.vy - 30) / 40 + (pl.power?.type === 'speed' && moving ? 0.35 : 0)) : 0;
+  const sl = $('speedLines'); sl.style.opacity = lines.toFixed(2);
+  if (lines > 0) sl.style.transform = `rotate(${(Math.random() * 6).toFixed(1)}deg)`;
   updateParticles(dt);
   let dYaw = pl.facing - character.rotation.y;
   dYaw = Math.atan2(Math.sin(dYaw), Math.cos(dYaw));
@@ -1824,17 +2430,28 @@ function frame(now) {
   camera.lookAt(camTarget);
   // screen shake + FOV punch
   fx.shake = Math.max(0, fx.shake - dt * 2.5);
-  const sh = fx.shake * fx.shake * 1.6;
+  const sh = settings.shake ? fx.shake * fx.shake * 1.6 : 0;
   camera.position.x += (Math.random() - 0.5) * sh;
   camera.position.y += (Math.random() - 0.5) * sh;
   camera.position.z += (Math.random() - 0.5) * sh;
   fx.fovKick = Math.max(0, fx.fovKick - dt * 3);
-  const fov = 70 + fx.fovKick * 14;
+  const fov = settings.fov + fx.fovKick * 14;
   if (camera.fov !== fov) { camera.fov = fov; camera.updateProjectionMatrix(); }
   sun.position.set(pl.x + 30, pl.y + 60, pl.z + 20);
   sun.target.position.set(pl.x, pl.y, pl.z);
 
   TEX.lava.offset.x += dt * 0.03; TEX.lava.offset.y += dt * 0.06;
+  TEX.conveyor.offset.x -= dt * beltSpeed / CONVEYOR_TILE;
+  for (const c of coins) if (!c.got) c.mesh.rotation.y = t * 3 + c.x;
+  // power-up countdown
+  if (pl.power && (pl.power.t -= dt) <= 0) { flashText(`${POWERS[pl.power.type].icon} wore off`); pl.power = null; }
+  // world ambience: embers rise, snow falls, End motes drift
+  if (theme.ambient && Math.random() < dt * 40) {
+    const a = Math.random() * Math.PI * 2, r = 4 + Math.random() * 26, x = pl.x + Math.cos(a) * r, z = pl.z + Math.sin(a) * r;
+    if (theme.ambient === 'embers') emit(x, pl.y - 6 + Math.random() * 6, z, tmpColor.setHSL(0.04 + Math.random() * 0.06, 1, 0.55), 0, 3 + Math.random() * 3, 0, 2.5, 0.25, -1);
+    else if (theme.ambient === 'snow') emit(x, pl.y + 12 + Math.random() * 6, z, tmpColor.set(0xffffff), 0.6, -4, 0.3, 4, 0.3, 0);
+    else emit(x, pl.y - 4 + Math.random() * 10, z, tmpColor.setHSL(0.75 + Math.random() * 0.1, 0.8, 0.7), 0, 0.6, 0, 3, 0.3, 0);
+  }
   MAT.lava.emissiveIntensity = 0.4 + Math.sin(now / 400) * 0.08;
   MAT.magma.emissiveIntensity = 0.5 + Math.sin(now / 300) * 0.2;
   sky.position.copy(camera.position);
@@ -1845,6 +2462,12 @@ function frame(now) {
     if (c.position.x > cloudBounds.maxX) c.position.x = cloudBounds.minX;
   }
 
+  for (const c of [character, ...[...mp.peers.values()].map(p => p.char)]) if (c.userData.hatSpin) c.userData.hatSpin.rotation.y += dt * 18;
+  $('runCoins').textContent = runCoins; $('wallet').textContent = wallet;
+  const best = bestTimes[courseKey];
+  $('bestHud').textContent = best ? `🏆 best ${best.toFixed(1)}s` : '';
+  $('bestHud').style.display = best ? 'block' : 'none';
+  $('powerHud').textContent = pl.power ? `${POWERS[pl.power.type].icon} ${POWERS[pl.power.type].name} ${pl.power.t.toFixed(1)}s` : '';
   $('stage').textContent = cpIndex;
   $('time').textContent = elapsed.toFixed(1);
   $('deaths').textContent = deaths;
