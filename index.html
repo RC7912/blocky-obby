@@ -45,6 +45,13 @@
   .item .ic { font-size: 34px; line-height: 1.1; }
   .item button { width: 100%; margin-top: 6px; font-size: 18px; }
   .item.on { outline: 2px solid #ffff55; }
+  .srv { display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,.07); border: 2px solid #000; padding: 6px 8px; margin-bottom: 6px; }
+  .srv.here { outline: 2px solid #55ff55; }
+  .srv div { flex: 1; min-width: 0; overflow-wrap: anywhere; line-height: 1.15; }
+  .srv b { color: #fff; font-weight: normal; }
+  .srv small { color: #a8a8a8; font-size: 16px; }
+  .srv button { flex: none; font-size: 18px; padding: 2px 12px; }
+  #srvName { width: 100%; padding: 3px 6px; border: 2px solid #a0a0a0; background: #000; color: #fff; font: inherit; outline: none; }
   #hud .dim { color: #c8c8c8; font-size: 19px; }
   #speedLines { position: fixed; inset: -25%; pointer-events: none; opacity: 0;
     background: repeating-conic-gradient(from 0deg at 50% 50%, rgba(255,255,255,0) 0deg 5deg, rgba(255,255,255,.6) 5deg 6deg);
@@ -171,6 +178,9 @@
     <button id="raceBtn">🏁 Race</button>
     <button id="netBtn" class="primary">🌐 Multiplayer on</button>
   </div>
+  <div class="row">
+    <button id="srvBtn" class="primary">🖥️ Servers</button>
+  </div>
 </div>
 <div id="hud" class="panel">
   Stage <b id="stage">0</b> / <span id="total">0</span><br>
@@ -195,7 +205,7 @@
   <h1>BLOCKY<br>OBBY</h1>
   <p>Endless Minecraft-style obstacle courses. Dance, race your friends, grab coins, buy hats.</p>
   <div class="row"><button id="playBtn" class="primary">▶ Play</button></div>
-  <div class="row"><button id="tDaily">📅 Daily challenge</button></div>
+  <div class="row"><button id="tSrv">🖥️ Servers</button><button id="tDaily">📅 Daily challenge</button></div>
   <div class="row"><button id="tShop">🛒 Shop</button><button id="tSet">⚙️ Settings</button></div>
   <p class="small">WASD + Space to play · works on phones too</p>
 </div></div>
@@ -213,6 +223,15 @@
     <label><input type="checkbox" id="s_ghost"> 👻 Best-run ghost</label>
   </div>
   <div class="row"><button class="close primary">Done</button></div>
+</div></div>
+<div id="serversM" class="modal"><div class="panel">
+  <h2>🖥️ Servers</h2>
+  <p id="srvNote"></p>
+  <div id="srvList"></div>
+  <h2>➕ New server</h2>
+  <input id="srvName" maxlength="20" placeholder="Server name">
+  <p>It uses the course from the menu (seed, stages, difficulty and world). Others can join it from this list.</p>
+  <div class="row"><button id="srvCreate" class="primary">Create &amp; join</button><button class="close">Close</button></div>
 </div></div>
 <div id="shop" class="modal"><div class="panel">
   <h2>🛒 Hat shop</h2>
@@ -1753,8 +1772,14 @@ function start() {
   const diff = $('diff').value, pick = $('world').value, world = worldFor(seed, pick);
   $('stages').value = stages;
   generate(seed, stages, diff, world);
-  history.replaceState(null, '', `#seed=${encodeURIComponent(seed)}&n=${stages}&d=${diff}${pick === 'auto' ? '' : '&w=' + pick}`);
-  courseKey = `${seed}|${stages}|${diff}|${world}`;
+  // switching to a different course leaves a named server for that course's Main server
+  const key = `${seed}|${stages}|${diff}|${world}`;
+  if (key !== courseKey && !mp.pinServer) mp.server = MAIN_SERVER;
+  mp.pinServer = false;
+  history.replaceState(null, '', `#seed=${encodeURIComponent(seed)}&n=${stages}&d=${diff}${pick === 'auto' ? '' : '&w=' + pick}` +
+    (mp.server === MAIN_SERVER ? '' : '&s=' + encodeURIComponent(mp.server)));
+  courseKey = key;
+  mp.info = { seed, n: stages, d: diff, w: pick };
   mpJoin(courseKey);
   cpIndex = 0; deaths = 0; elapsed = 0; running = false; finished = false; simTime = 0; runCoins = 0; pl.power = null;
   race = null;
@@ -1919,9 +1944,12 @@ for (const id of ['seed', 'stages']) $(id).addEventListener('keydown', e => { if
 // ---------- Multiplayer ----------
 // Everyone on the same seed/stages/difficulty shares a room. Players talk directly over WebRTC;
 // public Nostr relays are only used to find each other (Trystero).
+const MAIN_SERVER = 'Main';
+const cleanServer = s => String(s ?? '').replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 20);
 const TRYSTERO = 'https://cdn.jsdelivr.net/npm/trystero@0.25.4/+esm';
 const SEND_RATE = 1 / 15, MAX_PEERS = 24;
-const mp = { lib: null, room: null, key: '', course: '', peers: new Map(), sendT: 0 };
+const mp = { lib: null, room: null, key: '', course: '', server: MAIN_SERVER, peers: new Map(), sendT: 0,
+  lobby: null, ads: new Map(), adT: 0 };
 // offline mode: play solo without connecting to anyone
 let mpOffline = false;
 try { mpOffline = localStorage.getItem('obbyOnline') === 'off'; } catch (e) {}
@@ -2011,23 +2039,25 @@ $('chatIn').addEventListener('keydown', e => {
 $('chatIn').addEventListener('blur', e => { e.target.style.display = 'none'; });
 
 function onlineText() {
-  $('online').textContent = mpOffline ? 'offline mode' : !mp.room ? 'offline' : `${mp.peers.size + 1} online`;
+  $('online').textContent = mpOffline ? 'offline mode' : !mp.room ? 'offline' : `${mp.peers.size + 1} online · ${mp.server}`;
   $('netBtn').textContent = mpOffline ? '📴 Offline mode' : '🌐 Multiplayer on';
   $('netBtn').classList.toggle('primary', !mpOffline);
 }
 async function mpJoin(course) {
   mp.course = course;
-  const key = mpOffline ? '' : course;
+  // the Main server keeps the plain course key so it's the same room as before servers existed
+  const key = mpOffline ? '' : mp.server === MAIN_SERVER ? course : `${course}|srv:${mp.server}`;
   if (key === mp.key) return;
   mp.key = key;
   mp.room?.leave();
   mp.room = null;
   for (const id of [...mp.peers.keys()]) removePeer(id);
-  if (!key) { onlineText(); return; }
+  if (!key) { lobbyLeave(); onlineText(); return; }
   $('online').textContent = 'connecting…';
   try { mp.lib ??= await import(TRYSTERO); }
   catch (e) { $('online').textContent = 'offline'; return; }
   if (key !== mp.key) return;   // course changed while the library loaded
+  lobbyJoin(); mp.adT = 0;
   const room = mp.lib.joinRoom({ appId: 'blocky-obby-rc7912' }, key);
   mp.room = room;
   mp.hi = room.makeAction('hi'); mp.st = room.makeAction('st'); mp.ev = room.makeAction('ev');
@@ -2102,6 +2132,98 @@ $('netBtn').onclick = e => {
   e.target.blur();
 };
 onlineText();
+// ---------- Server list ----------
+// Every online player also sits in one shared lobby room and advertises which server
+// (name + course) they're in; the list is built from those adverts.
+const AD_RATE = 4, AD_TTL = 12000, SERVER_CAP = MAX_PEERS + 1;
+function myAd() {
+  return { s: mp.server, ...mp.info, c: mp.peers.size + 1 };
+}
+function cleanAd(a) {
+  const s = cleanServer(a?.s), seed = typeof a?.seed === 'string' ? a.seed.trim().slice(0, 40) : '';
+  if (!s || !seed || !Number.isInteger(a.n) || a.n < 3 || a.n > 60 || !['easy', 'normal', 'hard'].includes(a.d)) return null;
+  const w = a.w === 'auto' || Object.hasOwn(THEMES, a.w) ? a.w : 'auto';
+  return { s, seed, n: a.n, d: a.d, w, c: Number.isInteger(a.c) ? Math.min(99, Math.max(1, a.c)) : 1 };
+}
+function lobbyJoin() {
+  if (mp.lobby) return;
+  const room = mp.lib.joinRoom({ appId: 'blocky-obby-rc7912' }, 'lobby-v1');
+  mp.lobby = room;
+  mp.ad = room.makeAction('ad');
+  room.onPeerJoin = id => mp.ad.send(myAd(), { target: id });
+  room.onPeerLeave = id => { mp.ads.delete(id); renderServers(); };
+  mp.ad.onMessage = (d, { peerId }) => {
+    const ad = cleanAd(d);
+    if (ad) mp.ads.set(peerId, { ad, t: performance.now() }); else mp.ads.delete(peerId);
+    renderServers();
+  };
+  mp.adT = 0;
+}
+function lobbyLeave() {
+  mp.lobby?.leave();
+  mp.lobby = null; mp.ads.clear();
+  renderServers();
+}
+function updateLobby(dt) {
+  if (!mp.lobby || (mp.adT -= dt) > 0) return;
+  mp.adT = AD_RATE;
+  mp.ad.send(myAd());
+  const now = performance.now();
+  for (const [id, a] of mp.ads) if (now - a.t > AD_TTL) mp.ads.delete(id);
+  renderServers();
+}
+const serverKey = a => `${a.s}|${a.seed}|${a.n}|${a.d}|${a.w}`;
+function serverList() {
+  const list = new Map(), add = (a, n) => {
+    const k = serverKey(a), cur = list.get(k);
+    if (cur) { cur.players = Math.max(cur.players, a.c, ++cur.seen); }
+    else list.set(k, { ...a, players: Math.max(a.c, n), seen: n });
+  };
+  if (mp.room) add(myAd(), 1);
+  for (const { ad } of mp.ads.values()) add(ad, 1);
+  return [...list.values()].sort((a, b) => b.players - a.players);
+}
+const DIFF_NAMES = { easy: 'Easy', normal: 'Normal', hard: 'Hard' };
+function renderServers() {
+  if (!$('serversM').classList.contains('open')) return;
+  const box = $('srvList'), here = mp.room ? serverKey(myAd()) : '';
+  box.innerHTML = '';
+  $('srvNote').textContent = mpOffline ? 'You are in 📴 offline mode. Turn multiplayer on to see servers.'
+    : !mp.lobby ? 'Connecting to the server list…'
+    : `You're on "${mp.server}". Servers appear here while someone is playing on them.`;
+  for (const sv of serverList()) {
+    const isHere = serverKey(sv) === here, full = sv.players >= SERVER_CAP;
+    const d = document.createElement('div'); d.className = 'srv' + (isHere ? ' here' : '');
+    const world = sv.w === 'auto' ? '🎲' : THEMES[sv.w].name;
+    d.innerHTML = `<div><b>${esc(sv.s)}</b> <small>👥 ${sv.players}/${SERVER_CAP}</small><br>` +
+      `<small>${esc(sv.seed)} · ${sv.n} stages · ${DIFF_NAMES[sv.d]} · ${esc(world)}</small></div>`;
+    const b = document.createElement('button');
+    b.textContent = isHere ? 'Here' : full ? 'Full' : 'Join';
+    b.disabled = isHere || full;
+    if (!b.disabled) { b.className = 'primary'; b.onclick = () => joinServer(sv); }
+    d.appendChild(b); box.appendChild(d);
+  }
+}
+function joinServer(sv) {
+  mp.server = sv.s; mp.pinServer = true;
+  $('seed').value = sv.seed; $('stages').value = sv.n; $('diff').value = sv.d; $('world').value = sv.w;
+  $('serversM').classList.remove('open');
+  closeTitle();
+  start();
+  sysLine(`🖥️ Joined server "${sv.s}"`);
+}
+function openServers() {
+  $('serversM').classList.add('open');
+  renderServers();
+}
+$('srvBtn').onclick = e => { openServers(); e.target.blur(); };
+$('tSrv').onclick = openServers;
+$('srvCreate').onclick = () => {
+  const name = cleanServer($('srvName').value) || 'Server ' + Math.floor(100 + Math.random() * 900);
+  $('srvName').value = '';
+  joinServer({ s: name, seed: $('seed').value.trim() || 'obby', n: +$('stages').value || 12, d: $('diff').value, w: $('world').value });
+};
+$('srvName').addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') $('srvCreate').click(); });
 function mpHello() { if (mp.room) mp.hi.send(hello()); }
 function mpEvent(d) { if (mp.room && mp.peers.size) mp.ev.send(d); }
 
@@ -2259,6 +2381,7 @@ if (params.get('seed')) $('seed').value = params.get('seed');
 if (params.get('n')) $('stages').value = params.get('n');
 if (['easy', 'normal', 'hard'].includes(params.get('d'))) $('diff').value = params.get('d');
 $('world').value = Object.hasOwn(THEMES, params.get('w')) ? params.get('w') : 'auto';
+mp.server = cleanServer(params.get('s')) || MAIN_SERVER; mp.pinServer = true;
 $('world').onchange = e => { start(); e.target.blur(); };
 if (innerWidth <= 640) $('gen').classList.add('collapsed');
 start();
@@ -2411,7 +2534,7 @@ function frame(now) {
     const r = () => (Math.random() - 0.5) * 0.8;
     emit(pl.x + r(), pl.y - (pl.grounded ? 2.2 : 0.5) + r(), pl.z + r(), trailColor(), r(), 1 + Math.random() * 2, r(), 0.6, 0.45);
   }
-  updatePeers(dt);
+  updatePeers(dt); updateLobby(dt);
   updateRace(); updateGhost(dt); updateRockets(dt);
   // speed lines when you're flung, falling fast or boosted
   const lines = settings.speedLines ? Math.min(1, fx.fovKick * 0.8 + Math.max(0, -pl.vy - 30) / 40 + (pl.power?.type === 'speed' && moving ? 0.35 : 0)) : 0;
