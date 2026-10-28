@@ -1814,9 +1814,12 @@ for (const k of Object.keys(settings)) {
 applySettings();
 $('setBtn').onclick = e => { $('settingsM').classList.add('open'); document.exitPointerLock?.(); e.target.blur(); };
 // title screen: the game runs behind it, so your character is already dancing
-const closeTitle = () => { $('title').classList.remove('open'); document.body.classList.remove('title-open'); };
-// clicking the dimmed background also closes it (the generic .modal handler), so watch for that too
-new MutationObserver(() => { if (!$('title').classList.contains('open')) closeTitle(); }).observe($('title'), { attributes: true });
+const closeTitle = () => $('title').classList.remove('open');
+// however the title closes (Play, or clicking the dimmed background), bring the game UI back.
+// Only touch <body> here: changing the title's own class would re-trigger this observer forever
+new MutationObserver(() => {
+  if (!$('title').classList.contains('open')) document.body.classList.remove('title-open');
+}).observe($('title'), { attributes: true, attributeFilter: ['class'] });
 $('playBtn').onclick = closeTitle;
 $('tDaily').onclick = () => { closeTitle(); $('dailyBtn').click(); };
 $('tShop').onclick = () => $('shopBtn').click();
