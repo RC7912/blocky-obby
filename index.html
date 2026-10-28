@@ -967,6 +967,7 @@ function setRealistic(on) {
     t.needsUpdate = true;
   }
   for (const m of sunDisc.children) { m.material.map = on ? sunGlow : null; m.material.needsUpdate = true; }
+  restyleCourse();
   if (cloudArgs) makeClouds(...cloudArgs);
   const mats = new Set([...Object.values(BLOCKS).flat(), ...Object.values(MAT)]);
   scene.traverse(o => { if (o.isMesh) [].concat(o.material).forEach(m => mats.add(m)); });
@@ -1133,13 +1134,17 @@ function addPart(o) {
   p.hx = p.sx / 2; p.hy = p.sy / 2; p.hz = p.sz / 2;
   p.br = Math.hypot(p.hx, p.hz) + (p.move ? p.move.amp : 0) + 2;
   p.ice = p.block === 'ice';
+  p.shape = partShape(p);
   let mat;
-  if (p.power) { mat = own(MAT.power); mat.color.setHex(POWERS[p.power].color); mat.emissive.setHex(POWERS[p.power].color).multiplyScalar(0.5); }
+  if (p.power) {
+    mat = own(MAT.power); mat.color.setHex(POWERS[p.power].color); mat.emissive.setHex(POWERS[p.power].color).multiplyScalar(0.5);
+    if (realOn) { mat.specular.setHex(0xffffff); mat.shininess = 120; mat.opacity = 0.75; }
+  }
   else if (p.kill) mat = p.lava ? MAT.lava : MAT.magma;
   else if (p.vanish) mat = own(MAT.glass);
   else if (p.checkpoint !== undefined) mat = BLOCKS[p.block].map(own);
   else mat = BLOCKS[p.block];
-  p.mesh = new THREE.Mesh(boxGeo(p.sx, p.sy, p.sz, p.tile || BLOCK_TILE[p.block] || 2), mat);
+  p.mesh = new THREE.Mesh(partGeo(p), mat);
   p.mesh.position.set(p.x, p.y, p.z);
   p.mesh.rotation.y = p.yaw;
   p.mesh.castShadow = p.mesh.receiveShadow = true;
@@ -1150,6 +1155,50 @@ function addPart(o) {
   parts.push(p);
   minY = Math.min(minY, p.y);
   return p;
+}
+
+// Realistic mode rounds off some obstacles: spinning bars, sliding pillars and stone poles
+// become cylinders and power-ups glass orbs. Collision still uses the boxes.
+function partShape(p) {
+  if (p.power) return 'orb';
+  if (p.kill && !p.lava && p.sy >= 0.6) return p.sx > p.sy * 3 ? 'barX' : p.sz > p.sy * 3 ? 'barZ' : 'pillar';
+  if (p.block === 'cobble' && p.sy >= 2 && p.sx < 2) return 'pillar';
+  return null;
+}
+function partGeo(p) {
+  switch (realOn && p.shape) {
+    case 'orb': return new THREE.SphereGeometry(p.sx * 0.55, 32, 20);
+    case 'pillar': return new THREE.CylinderGeometry(p.sx / 2, p.sx / 2, p.sy, 28);
+    case 'barX': return new THREE.CylinderGeometry(p.sy / 2, p.sy / 2, p.sx, 24).rotateZ(Math.PI / 2);
+    case 'barZ': return new THREE.CylinderGeometry(p.sy / 2, p.sy / 2, p.sz, 24).rotateX(Math.PI / 2);
+    default: return boxGeo(p.sx, p.sy, p.sz, p.tile || BLOCK_TILE[p.block] || 2);
+  }
+}
+// stamped gold coin: raised rim and a star, for realistic mode
+let coinTex = null;
+function makeCoinTex() {
+  const n = fbm(8, 3);
+  const r = realCanvas((u, v) => {
+    const x = u - 0.5, y = v - 0.5, d = Math.hypot(x, y), a = Math.atan2(y, x);
+    const star = d < 0.17 + 0.09 * Math.cos(5 * a + Math.PI / 2), rim = d > 0.4 && d < 0.47;
+    const h = rim || star ? 0.9 : 0.4, k = n(u, v);
+    return [...mixc(rgb(0xc8901a), rgb(0xffe27a), (rim || star ? 0.75 : 0.45) + k * 0.2), h];
+  });
+  const t = new THREE.CanvasTexture(r.c), b = new THREE.CanvasTexture(r.h);
+  t.anisotropy = MAX_ANISO;
+  return { t, b };
+}
+function restyleCourse() {
+  for (const p of parts) if (p.shape) { p.mesh.geometry.dispose(); p.mesh.geometry = partGeo(p); }
+  for (const p of parts) if (p.power) for (const m of [].concat(p.mesh.material)) {
+    m.specular.setHex(realOn ? 0xffffff : 0); m.shininess = realOn ? 120 : 8; m.opacity = realOn ? 0.75 : 0.9;
+  }
+  if (realOn) coinTex ??= makeCoinTex();
+  const c = MAT.coin;
+  c.map = realOn ? coinTex.t : null; c.bumpMap = realOn ? coinTex.b : null; c.bumpScale = 0.04;
+  c.color.setHex(realOn ? 0xffffff : 0xffd84a); c.emissive.setHex(realOn ? 0x3a2a00 : 0x7a5a00);
+  c.specular.setHex(realOn ? 0xfff0b0 : 0); c.shininess = realOn ? 90 : 8;
+  c.needsUpdate = true;
 }
 
 function clearCourse() {
@@ -1335,7 +1384,6 @@ const SKINS = {
   ocean:   { name: 'Ocean Wave', skin: 0xbfe9ff, torso: 0x0077b6, legs: 0x023e8a, cape: 0x00b4d8, hat: 0xffffff, glow: 0.2, trail: 'cape' },
   candy:   { name: 'Cotton Candy', skin: 0xffe5ec, torso: 0xff8fab, legs: 0xa2d2ff, cape: 0xcdb4db, hat: 0xffc8dd, glow: 0, trail: 'rainbow' },
   toxic:   { name: 'Toxic', skin: 0x9ef01a, torso: 0x1b1b1b, legs: 0x38b000, cape: 0x70e000, hat: 0x1b1b1b, glow: 0.6, trail: 'cape' },
-  human:   { name: 'Everyday Hero', skin: 0xd9a27e, torso: 0x5b6b7a, legs: 0x3b5b8c, cape: 0xb3262e, hat: 0x3a2618, glow: 0, trail: 'sparkle' },
   bigboned: { name: 'Big Boned', skin: 0xf6d2ae, torso: 0xd7262e, legs: 0x7b4a24, cape: 0xf3c70f, hat: 0x17b3ae, glow: 0, trail: 'cape' },
 };
 let customSkin = null;
@@ -1383,20 +1431,6 @@ const makeMats = () => ({
   eye: new THREE.MeshBasicMaterial({ color: 0xffffff }),
   ink: new THREE.MeshBasicMaterial({ color: 0x111111 }),
   outline: new THREE.MeshBasicMaterial({ color: 0x111111, side: THREE.BackSide }),
-  // Realistic style: smooth lit materials with fabric / skin detail (textures added on first use)
-  real: {
-    skin: new THREE.MeshPhongMaterial({ specular: 0x221a18, shininess: 18 }),
-    torso: new THREE.MeshPhongMaterial({ specular: 0x0a0a0a, shininess: 6 }),
-    legs: new THREE.MeshPhongMaterial({ specular: 0x0a0a0a, shininess: 6 }),
-    cape: new THREE.MeshPhongMaterial({ specular: 0x111111, shininess: 12, side: THREE.DoubleSide }),
-    hat: new THREE.MeshPhongMaterial({ specular: 0x333333, shininess: 30 }),   // hair
-    shoe: new THREE.MeshPhongMaterial({ color: 0x2a2624, specular: 0x333333, shininess: 40 }),
-    sole: new THREE.MeshPhongMaterial({ color: 0xe8e4dc }),
-    eye: new THREE.MeshPhongMaterial({ color: 0xf6f4ef, specular: 0xffffff, shininess: 90 }),
-    iris: new THREE.MeshPhongMaterial({ color: 0x3b2a1e, specular: 0xffffff, shininess: 120 }),
-    brow: new THREE.MeshPhongMaterial({ color: 0x2b1d14 }),
-    lips: new THREE.MeshPhongMaterial({ color: 0xa8545a, specular: 0x331111, shininess: 30 }),
-  },
 });
 const mats = makeMats();
 let currentSkin = SKINS.classic;
@@ -1412,16 +1446,12 @@ function paintMats(mats, s) {
     mats.flat[k].color.copy(mats[k].color);
   }
   mats.torsoFront.color.copy(mats.torso.color); mats.torsoFront.emissive.copy(mats.torso.emissive);
-  for (const k of ['skin', 'torso', 'legs', 'cape', 'hat']) {
-    mats.real[k].color.set(s[k]);
-    if (k !== 'skin' && k !== 'hat') mats.real[k].emissive.set(s[k]).multiplyScalar(s.glow);
-  }
 }
 
 // STYLES: how a character is built. Every style has the same joints (body, head, limbs,
 // two-piece cape) at the same height, so animation, emotes and multiplayer work unchanged.
-const STYLES = { realistic: '🧍 Realistic', roblox: '🧱 Roblox', southpark: '✂️ South Park' };
-const cleanStyle = st => Object.hasOwn(STYLES, st) ? st : 'roblox';   // old clients don't send a style
+const STYLES = { roblox: '🧱 Roblox', southpark: '✂️ South Park' };
+const cleanStyle = st => Object.hasOwn(STYLES, st) ? st : 'roblox';
 function makeCharacter(mats, style = 'roblox') {
   const root = new THREE.Group();
   buildBody(root, mats, style);
@@ -1434,12 +1464,10 @@ function buildBody(root, mats, style) {
   const body = new THREE.Group();
   root.add(body);
   const pivot = (x, y, z, parent = body) => { const p = new THREE.Group(); p.position.set(x, y, z); parent.add(p); return p; };
-  const joints = style === 'southpark' ? southParkRig(body, mats, pivot)
-    : style === 'realistic' ? realisticRig(body, mats, pivot) : robloxRig(body, mats, pivot);
+  const joints = style === 'southpark' ? southParkRig(body, mats, pivot) : robloxRig(body, mats, pivot);
   // shop hats sit on top of the head; the South Park head is much bigger, so they scale up
   const hatAnchor = new THREE.Group();
   if (style === 'southpark') { hatAnchor.position.set(0, 2.55, 0.3); hatAnchor.scale.set(3, 2.2, 2.6); }
-  else if (style === 'realistic') { hatAnchor.position.set(0, 1.18, -0.02); hatAnchor.scale.setScalar(0.85); }
   else hatAnchor.position.set(0, 1.2, 0);
   joints.head.add(hatAnchor);
   Object.assign(root.userData, { body, style, hatAnchor, ...joints });
@@ -1470,104 +1498,6 @@ function robloxRig(body, mats, pivot) {
   mk(1.8, 1.4, 0.08, mats.cape, 0, -0.7, 0, capeTop);
   const capeLow = pivot(0, -1.4, 0, capeTop);
   mk(1.8, 1.3, 0.08, mats.cape, 0, -0.65, 0, capeLow);
-  return { head, legL, legR, armL, armR, capeTop, capeLow };
-}
-// a person with human proportions, built from smooth tapered limbs, standing on the same
-// joints as the blocky rig (hips at -0.5, shoulders at 1.15, neck at 1.45, soles at -2.5).
-// Hat colour is the hair; cape colour is a cloth cape
-let humanTex = null;
-function humanTextures() {
-  if (humanTex) return humanTex;
-  const tex = (fn, rep = [1, 1]) => {
-    const r = realCanvas(fn), t = new THREE.CanvasTexture(r.c);
-    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(...rep); t.anisotropy = MAX_ANISO;
-    return t;
-  };
-  const n = fbm(6, 4), fine = vnoise(96);
-  humanTex = {
-    // drawn near-white so the material colour sets the tone
-    skin: tex((u, v) => { const k = 236 + n(u, v) * 16 + fine(u, v) * 4; return [k, k - 4, k - 6, 0]; }),
-    // knit cotton: fine weave plus soft creases
-    shirt: tex((u, v) => {
-      const weave = ((Math.floor(u * 128) + Math.floor(v * 128)) % 2) * 8, k = 214 + n(u, v) * 30 + weave;
-      return [k, k, k, 0];
-    }, [2, 2]),
-    // denim twill: diagonal lines and fading
-    denim: tex((u, v) => {
-      const tw = Math.sin((u * 64 + v * 64) * Math.PI * 2) * 0.5 + 0.5, k = 190 + tw * 30 + n(u, v) * 35;
-      return [k, k, k + 6, 0];
-    }, [2, 3]),
-    hair: tex((u, v) => { const k = 200 + Math.sin((u * 90 + n(u, v) * 6) * Math.PI * 2) * 30 + fine(u, v) * 20; return [k, k, k, 0]; }),
-  };
-  return humanTex;
-}
-function realisticRig(body, mats, pivot) {
-  const M = mats.real, T = humanTextures();
-  if (M.skin.map !== T.skin) {
-    M.skin.map = T.skin; M.torso.map = T.shirt; M.legs.map = T.denim; M.cape.map = T.shirt; M.hat.map = T.hair;
-    for (const m of Object.values(M)) m.needsUpdate = true;
-  }
-  const mesh = (geo, mat, x, y, z, parent, scale) => {
-    const m = new THREE.Mesh(geo, mat);
-    m.position.set(x, y, z); if (scale) m.scale.set(...scale);
-    m.castShadow = true; parent.add(m); return m;
-  };
-  const sphere = (r, mat, x, y, z, parent, scale) => mesh(new THREE.SphereGeometry(r, 24, 16), mat, x, y, z, parent, scale);
-  // tapered limb segment hanging down from y0 to y1
-  const seg = (r0, r1, y0, y1, mat, parent, x = 0, z = 0) =>
-    mesh(new THREE.CylinderGeometry(r0, r1, y0 - y1, 20), mat, x, (y0 + y1) / 2, z, parent);
-  // torso: a lathe profile (hips -> waist -> chest -> shoulders), flattened front to back
-  const prof = [[0.01, -0.3], [0.56, -0.28], [0.6, -0.05], [0.55, 0.3], [0.62, 0.75], [0.72, 1.02], [0.66, 1.2], [0.32, 1.36], [0.01, 1.4]];
-  mesh(new THREE.LatheGeometry(prof.map(([r, y]) => new THREE.Vector2(r, y)), 28), M.torso, 0, 0, 0, body, [1.12, 1, 0.68]);
-  // hips / belt in the trouser colour
-  mesh(new THREE.CylinderGeometry(0.62, 0.64, 0.42, 28), M.legs, 0, -0.42, 0, body, [1.05, 1, 0.7]);
-  mesh(new THREE.CylinderGeometry(0.63, 0.63, 0.07, 28), M.shoe, 0, -0.24, 0, body, [1.05, 1, 0.71]);
-  // head on a neck pivot so it can bobble
-  const head = pivot(0, 1.4, 0);
-  seg(0.16, 0.18, 0.32, -0.02, M.skin, head);
-  sphere(1, M.skin, 0, 0.62, 0.02, head, [0.47, 0.58, 0.5]);
-  sphere(1, M.skin, 0, 0.42, 0.13, head, [0.33, 0.24, 0.35]);                       // jaw
-  for (const sx of [-1, 1]) {
-    sphere(1, M.skin, sx * 0.47, 0.62, 0, head, [0.06, 0.12, 0.08]);              // ears
-    sphere(0.08, M.eye, sx * 0.165, 0.68, 0.43, head);
-    sphere(0.045, M.iris, sx * 0.165, 0.68, 0.5, head);
-    mesh(new THREE.BoxGeometry(0.17, 0.035, 0.05), M.brow, sx * 0.17, 0.8, 0.46, head).rotation.z = -sx * 0.12;
-  }
-  sphere(1, M.skin, 0, 0.6, 0.51, head, [0.06, 0.1, 0.08]);                      // nose
-  sphere(1, M.lips, 0, 0.45, 0.43, head, [0.11, 0.03, 0.04]);                       // mouth
-  // hair: a cap over the crown and back of the head
-  const hair = new THREE.SphereGeometry(1, 28, 16, 0, Math.PI * 2, 0, Math.PI * 0.55);
-  mesh(hair, M.hat, 0, 0.66, -0.02, head, [0.5, 0.58, 0.53]);
-  mesh(new THREE.SphereGeometry(1, 24, 12, Math.PI * 0.6, Math.PI * 0.8, 0, Math.PI * 0.8), M.hat, 0, 0.62, -0.04, head, [0.495, 0.59, 0.53]);
-  // arms: shirt sleeve, then bare forearm and hand
-  const arm = sx => {
-    const p = pivot(sx * 0.92, 1.1, 0);
-    sphere(0.27, M.torso, 0, 0, 0, p);
-    seg(0.26, 0.2, 0, -0.78, M.torso, p);
-    seg(0.17, 0.155, -0.72, -0.9, M.skin, p);
-    sphere(0.16, M.skin, 0, -0.92, 0, p);
-    seg(0.16, 0.12, -0.92, -1.58, M.skin, p);
-    sphere(1, M.skin, 0, -1.72, 0.02, p, [0.13, 0.17, 0.09]);
-    return p;
-  };
-  const armL = arm(-1), armR = arm(1);
-  // legs: jeans down to the ankle, then a trainer whose sole sits on the floor
-  const leg = sx => {
-    const p = pivot(sx * 0.34, -0.5, 0);
-    sphere(0.33, M.legs, 0, 0, 0, p);
-    seg(0.33, 0.24, 0, -0.95, M.legs, p);
-    sphere(0.24, M.legs, 0, -0.95, 0, p);
-    seg(0.24, 0.18, -0.95, -1.78, M.legs, p);
-    sphere(1, M.shoe, 0, -1.85, 0.1, p, [0.2, 0.14, 0.34]);
-    mesh(new THREE.BoxGeometry(0.38, 0.08, 0.66), M.sole, 0, -1.96, 0.1, p);
-    return p;
-  };
-  const legL = leg(-1), legR = leg(1);
-  // two-piece cloth cape so it bends as it flaps
-  const capeTop = pivot(0, 1.25, -0.42);
-  mesh(new THREE.BoxGeometry(1.25, 1.3, 0.04), M.cape, 0, -0.65, 0, capeTop);
-  const capeLow = pivot(0, -1.3, 0, capeTop);
-  mesh(new THREE.BoxGeometry(1.25, 1.1, 0.04), M.cape, 0, -0.55, 0, capeLow);
   return { head, legL, legR, armL, armR, capeTop, capeLow };
 }
 // paper-cutout cartoon kid, built big-boned: a huge wide head in front of a round coat,
@@ -1701,13 +1631,8 @@ const ball = new THREE.SphereGeometry(1, 32, 20);
 const dome = new THREE.SphereGeometry(1, 32, 12, 0, Math.PI * 2, 0, Math.PI / 2);
 const band = new THREE.CylinderGeometry(1, 1, 1, 32);
 const SHARED_GEO = [ball, dome, band];
-let myStyle = 'realistic';
-try {
-  // realistic became the default; players still on the old default move over once
-  const saved = localStorage.getItem('obbyStyle');
-  myStyle = cleanStyle(saved && !(saved === 'roblox' && !localStorage.getItem('obbyStyleV2')) ? saved : 'realistic');
-  localStorage.setItem('obbyStyleV2', '1');
-} catch (e) {}
+let myStyle = 'roblox';
+try { myStyle = cleanStyle(localStorage.getItem('obbyStyle')); } catch (e) {}
 const character = makeCharacter(mats, myStyle);
 scene.add(character);
 let savedSkin = 'classic';
@@ -2800,7 +2725,7 @@ function removePeer(id) {
   mp.peers.delete(id);
   scene.remove(p.char);
   p.char.traverse(o => { o.geometry?.dispose(); if (o.isSprite) { o.material.map.dispose(); o.material.dispose(); } });
-  for (const m of [...Object.values(p.mats), ...Object.values(p.mats.flat), ...Object.values(p.mats.real)]) m.dispose?.();
+  for (const m of [...Object.values(p.mats), ...Object.values(p.mats.flat)]) m.dispose?.();
 }
 
 // head size; on the South Park rig the head undoes the body's squash so it stays round
@@ -2898,7 +2823,7 @@ function updateRace() {
 // see-through copy replays it so you can race yourself.
 const ghostMats = makeMats();
 paintMats(ghostMats, { skin: 0xbfe9ff, torso: 0xbfe9ff, legs: 0xbfe9ff, cape: 0xbfe9ff, hat: 0xbfe9ff, glow: 0.6 });
-for (const m of [...Object.values(ghostMats), ...Object.values(ghostMats.flat), ...Object.values(ghostMats.real)])
+for (const m of [...Object.values(ghostMats), ...Object.values(ghostMats.flat)])
   if (m.isMaterial) Object.assign(m, { transparent: true, opacity: 0.35, depthWrite: false });
 const ghost = { char: makeCharacter(ghostMats, myStyle), rec: [], recT: 0, data: null };
 ghost.char.visible = false;

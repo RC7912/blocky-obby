@@ -13,11 +13,11 @@ A Minecraft-style obby (obstacle course) generator that runs in your browser —
 - **Coins and a hat shop** — grab 🪙 along the course; they're banked when you finish, plus a finish bonus. Spend them on hats like a crown, top hat, halo or a spinning propeller cap.
 - **Best times and ghosts** — your best time per course is saved, and a see-through 👻 ghost replays your best run so you can race yourself.
 - **Daily challenge** — one course per day that's the same for everyone, so it's a good place to meet other players.
-- **Realistic textures** — the Overworld, Nether, Frozen Peaks and The End use detailed textures with bumpy surfaces (grass blades, pebbly dirt, cobblestone, wood grain, glowing magma cracks, flowing lava). Clouds become soft and fluffy and the sun is round. Turn off **🌄 Realistic textures** in ⚙️ Settings to go back to the blocky pixel look.
+- **Realistic textures** — the Overworld, Nether, Frozen Peaks and The End use detailed textures with bumpy surfaces (grass blades, pebbly dirt, cobblestone, wood grain, glowing magma cracks, flowing lava). Obstacles get rounder too: spinning bars become glowing hot rods, sliding pillars and poles become round columns, power-ups are glass orbs and coins are stamped gold. Clouds become soft and fluffy and the sun is round. Turn off **🌄 Realistic textures** in ⚙️ Settings to go back to the blocky pixel look.
 - **Minecraft look** — pixel textures for grass, dirt, sand, snow, ice, stone, bricks, planks, netherrack, end stone, purpur, obsidian, XP windows, gold, emerald and diamond, plus blocky clouds.
 - **Double jump** — press jump again in the air.
 - **Skins** — 8 characters, or make your own with custom colors, trails and neon glow.
-- **Three character styles** — 🧍 Realistic (a person with real proportions, face, t-shirt, jeans and trainers — the default), blocky 🧱 Roblox, and round paper-cutout ✂️ South Park. Pick one in the menu; your skin colors work with all of them, and other players see the style you picked. Try the **Everyday Hero** skin for natural colors.
+- **Two art styles** — switch between blocky Roblox-style and a round paper-cutout South Park style in the menu. Your skin colors work with both, and other players see the style you picked.
 - **Tweenslop animation** — squash and stretch, flips, bobble head, screen shake and meme popups.
 - **Emotes** — dance, wave, dab, floss, sit, cheer, breakdance, laugh, play dead… or explode 💥.
 - **Multiplayer** — everyone on the same course plays together, with name tags and chat. Press **🏁 Race** for a countdown race where everyone restarts together and finishers are ranked 🥇🥈🥉.
