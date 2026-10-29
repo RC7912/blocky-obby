@@ -222,6 +222,7 @@
     <label><input type="checkbox" id="s_speedLines"> Speed lines</label>
     <label><input type="checkbox" id="s_ghost"> 👻 Best-run ghost</label>
     <label><input type="checkbox" id="s_realistic"> 🌄 Realistic textures</label>
+    <label><input type="checkbox" id="s_dayNight"> 🌗 Day &amp; night</label>
   </div>
   <div class="row"><button class="close primary">Done</button></div>
 </div></div>
@@ -265,7 +266,7 @@ const store = {
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
 };
 
-const settings = Object.assign({ volume: 0.8, music: 0.7, sens: 1, fov: 70, shadows: true, shake: true, memes: true, ghost: true, speedLines: true, realistic: true },
+const settings = Object.assign({ volume: 0.8, music: 0.7, sens: 1, fov: 70, shadows: true, shake: true, memes: true, ghost: true, speedLines: true, realistic: true, dayNight: true },
   store.get('obbySettings', {}));
 
 // ---------- Renderer / scene ----------
@@ -607,16 +608,16 @@ const BLOCK_TILE = { xpWindow: 4, xpTaskbar: 4, xpStart: 4 };
 // hemi: sky / ground light colours + intensity; ambient: floating particles around the player
 const THEMES = {
   overworld: { name: '🌳 Overworld', biomes: ['grass', 'sand', 'grass', 'snow'], cp: 'bricks', sky: [0x6f9fff, 0xc0d8ff, 0xd8e6ff],
-    hemi: [0xffffff, 0x8899aa, 0.65], sun: 0.75, sunDisc: true, clouds: true, ambient: null },
+    hemi: [0xffffff, 0x8899aa, 0.65], sun: 0.75, sunDisc: true, clouds: true, ambient: null, cycle: true },
   nether: { name: '🔥 Nether', biomes: ['netherrack', 'blackstone', 'netherrack', 'netherBricks'], cp: 'netherBricks', sky: [0x2a0606, 0x9a3412, 0x1a0404],
     hemi: [0xffc49a, 0x5a1a0a, 0.85], sun: 0.45, sunDisc: false, clouds: false, ambient: 'embers' },
   frozen: { name: '❄️ Frozen Peaks', biomes: ['snow', 'snow', 'ice', 'snow'], cp: 'bricks', sky: [0x8fb8ff, 0xeef6ff, 0xffffff],
-    hemi: [0xffffff, 0xa8c0e0, 0.75], sun: 0.7, sunDisc: true, clouds: true, ambient: 'snow' },
+    hemi: [0xffffff, 0xa8c0e0, 0.75], sun: 0.7, sunDisc: true, clouds: true, ambient: 'snow', cycle: true },
   end: { name: '🌌 The End', biomes: ['endstone', 'purpur', 'endstone', 'obsidian'], cp: 'purpur', sky: [0x07031a, 0x3b1d6e, 0x05020f],
     hemi: [0xd8c4ff, 0x2a1840, 0.75], sun: 0.4, sunDisc: false, clouds: false, ambient: 'void' },
   // the Bliss wallpaper: deep blue sky, soft clouds, green hills below
   xp: { name: '🪟 Windows XP', biomes: ['bliss', 'xpWindow', 'bliss', 'xpTaskbar'], cp: 'xpStart', sky: [0x1f5fd6, 0xa9d1f7, 0x4f9a35],
-    hemi: [0xffffff, 0x6aa84f, 0.6], sun: 0.7, sunDisc: true, clouds: true, ambient: 'xp' },
+    hemi: [0xffffff, 0x6aa84f, 0.6], sun: 0.7, sunDisc: true, clouds: true, ambient: 'xp', cycle: true },
 };
 // "auto" picks a world from the seed, with the Overworld twice as likely
 const AUTO_WORLDS = ['overworld', 'overworld', 'nether', 'frozen', 'end', 'xp'];
@@ -967,7 +968,7 @@ function setRealistic(on) {
     t.offset.set(0, on ? 0.5 : 0);
     t.needsUpdate = true;
   }
-  for (const m of sunDisc.children) { m.material.map = on ? sunGlow : null; m.material.needsUpdate = true; }
+  for (const m of [...sunDisc.children, moonDisc]) { m.material.map = on ? sunGlow : null; m.material.needsUpdate = true; }
   restyleCourse();
   if (cloudArgs) makeClouds(...cloudArgs);
   const mats = new Set([...Object.values(BLOCKS).flat(), ...Object.values(MAT)]);
@@ -1042,6 +1043,74 @@ for (const [size, color, opacity] of [[150, 0xfff3b0, 0.18], [70, 0xfffbe0, 1]])
 }
 scene.add(sunDisc);
 
+// ---------- Day and night ----------
+// Worlds with an open sky (Overworld, Frozen Peaks, Windows XP) cycle through day, sunset
+// and a starry night. The time comes from the clock, so everyone online shares the same sky.
+const CYCLE = 300;          // seconds for a whole day
+const DAY_PART = 0.65;      // share of the cycle the sun is up
+const moonDisc = new THREE.Mesh(new THREE.PlaneGeometry(45, 45), new THREE.MeshBasicMaterial({ color: 0xe6ebf5, transparent: true, fog: false, depthWrite: false }));
+moonDisc.renderOrder = -1;
+scene.add(moonDisc);
+const stars = (() => {
+  const n = 1400, pos = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    // upper part of a sphere, a few dipping below the horizon
+    const a = Math.random() * Math.PI * 2, y = Math.random() * 1.1 - 0.1, r = Math.sqrt(1 - y * y);
+    pos.set([Math.cos(a) * r * 650, y * 650, Math.sin(a) * r * 650], i * 3);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const pts = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xffffff, size: 2.2, sizeAttenuation: false, transparent: true, fog: false, depthWrite: false }));
+  pts.renderOrder = -1; pts.frustumCulled = false;
+  return pts;
+})();
+scene.add(stars);
+const NIGHT_SKY = [0x02050f, 0x0d1735, 0x050914], DUSK = new THREE.Color(0xff8a4a), DUSK_TOP = new THREE.Color(0x46508f);
+const sunDir = SUN_DIR.clone(), lightDir = SUN_DIR.clone();
+const _c1 = new THREE.Color(), _c2 = new THREE.Color();
+let isNight = false, cycleOn = false;
+// 0..1 through the day: a little after sunrise when the game starts counting
+const dayPhase = () => (Date.now() / 1000 / CYCLE + 0.08) % 1;
+function updateDayNight(dt) {
+  const on = !!(theme.cycle && settings.dayNight);
+  moonDisc.visible = stars.visible = on;
+  // switching the cycle off puts the world's normal daytime sky back
+  if (!on && cycleOn) { applyTheme(theme); isNight = false; }
+  cycleOn = on;
+  if (!on) { sunDir.copy(SUN_DIR); lightDir.copy(SUN_DIR); return; }
+  // sun arcs overhead during the day part, then sits below the horizon for the night
+  const ph = dayPhase(), a = ph < DAY_PART ? ph / DAY_PART * Math.PI : Math.PI + (ph - DAY_PART) / (1 - DAY_PART) * Math.PI;
+  sunDir.set(Math.cos(a) * 0.8, Math.sin(a), 0.45).normalize();
+  const day = sstep(-0.12, 0.25, sunDir.y), dusk = sunDir.y > -0.2 ? 1 - sstep(0.05, 0.4, Math.abs(sunDir.y)) : 0;
+  const th = theme, U = sky.material.uniforms;
+  U.top.value.setHex(NIGHT_SKY[0]).lerp(_c1.setHex(th.sky[0]), day).lerp(DUSK_TOP, dusk * 0.4);
+  U.horizon.value.setHex(NIGHT_SKY[1]).lerp(_c1.setHex(th.sky[1]), day).lerp(DUSK, dusk * 0.55);
+  U.bottom.value.setHex(NIGHT_SKY[2]).lerp(_c1.setHex(th.sky[2]), day);
+  scene.fog.color.copy(U.horizon.value);
+  hemi.intensity = th.hemi[2] * (0.32 + 0.68 * day);
+  hemi.color.setHex(0x7d8fc8).lerp(_c1.setHex(th.hemi[0]), day);
+  // daylight from the sun, pale blue moonlight at night, warm at sunrise and sunset
+  const moonUp = sunDir.y < 0;
+  lightDir.copy(sunDir); if (moonUp) lightDir.negate();
+  lightDir.y = Math.max(lightDir.y, 0.25); lightDir.normalize();
+  sun.intensity = moonUp ? 0.28 * (1 - day) : th.sun * Math.max(day, 0.15);
+  sun.color.setHex(moonUp ? 0x9fb4ff : 0xffffff).lerp(_c2.setHex(0xffb070), moonUp ? 0 : dusk * 0.6);
+  sunDisc.visible = th.sunDisc && sunDir.y > -0.15;
+  stars.material.opacity = 1 - sstep(-0.2, 0.08, sunDir.y);
+  moonDisc.material.opacity = Math.min(1, 0.25 + stars.material.opacity);
+  // clouds dim with the light
+  const shade = 0.35 + 0.65 * day;
+  MAT.cloud.color.setScalar(shade); MAT.cloud.emissive.setScalar(0.6 * shade);
+  if (cloudSprite) cloudSprite.color.setRGB(shade, shade, shade + (1 - day) * 0.08);
+  const night = sunDir.y < -0.05;
+  if (night !== isNight) { isNight = night; if (running) flashText(night ? '🌙 Night falls' : '☀️ Good morning!'); }
+  // fireflies drift around you on Overworld nights
+  if (night && th === THEMES.overworld && Math.random() < dt * 8) {
+    const r = 4 + Math.random() * 20, b = Math.random() * Math.PI * 2;
+    emit(pl.x + Math.cos(b) * r, pl.y - 2 + Math.random() * 6, pl.z + Math.sin(b) * r, tmpColor.setHSL(0.17, 1, 0.65), (Math.random() - 0.5), 0.4, (Math.random() - 0.5), 2.5, 0.22, 0);
+  }
+}
+
 const clouds = new THREE.Group();
 scene.add(clouds);
 let cloudBounds = null;
@@ -1102,6 +1171,9 @@ function applyTheme(th) {
   sun.intensity = th.sun;
   sunDisc.visible = th.sunDisc;
   clouds.visible = th.clouds;
+  MAT.cloud.color.setScalar(1); MAT.cloud.emissive.setHex(0x9a9a9a);
+  if (cloudSprite) cloudSprite.color.setScalar(1);
+  sun.color.setHex(0xffffff);
 }
 
 // small canvas + nearest filtering = chunky pixel text with a Minecraft-style drop shadow
@@ -3154,7 +3226,8 @@ function frame(now) {
   fx.fovKick = Math.max(0, fx.fovKick - dt * 3);
   const fov = settings.fov + fx.fovKick * 14;
   if (camera.fov !== fov) { camera.fov = fov; camera.updateProjectionMatrix(); }
-  sun.position.set(pl.x + 30, pl.y + 60, pl.z + 20);
+  updateDayNight(dt);
+  sun.position.set(pl.x + lightDir.x * 75, pl.y + lightDir.y * 75, pl.z + lightDir.z * 75);
   sun.target.position.set(pl.x, pl.y, pl.z);
 
   TEX.lava.offset.x += dt * 0.03; TEX.lava.offset.y += dt * 0.06;
@@ -3182,8 +3255,11 @@ function frame(now) {
   }
   MAT.magma.emissiveIntensity = 0.5 + Math.sin(now / 300) * 0.2;
   sky.position.copy(camera.position);
-  sunDisc.position.copy(camera.position).addScaledVector(SUN_DIR, 700);
+  sunDisc.position.copy(camera.position).addScaledVector(sunDir, 700);
   sunDisc.lookAt(camera.position);
+  moonDisc.position.copy(camera.position).addScaledVector(sunDir, -700);
+  moonDisc.lookAt(camera.position);
+  stars.position.copy(camera.position);
   if (cloudBounds) for (const c of clouds.children) {
     c.position.x += dt * 2;
     if (c.position.x > cloudBounds.maxX) c.position.x = cloudBounds.minX;
