@@ -14,8 +14,24 @@
   canvas { display: block; touch-action: none; }
   .panel { position: fixed; background: rgba(0, 0, 0, .58); border: 2px solid #000; padding: 12px 14px;
     box-shadow: inset 2px 2px 0 rgba(255,255,255,.16), inset -2px -2px 0 rgba(0,0,0,.45); text-shadow: 2px 2px 0 var(--shadow); }
-  #gen { top: 12px; left: 12px; width: 260px; }
-  #gen h1 { font-family: "Press Start 2P", monospace; font-size: 12px; line-height: 1.5; margin: 0 0 8px; color: #ffff55; }
+  #gen { top: 12px; left: 12px; width: 280px; padding: 10px 12px 12px; }
+  #gen.collapsed { display: none; }
+  .genHead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  #gen h1 { font-family: "Press Start 2P", monospace; font-size: 12px; line-height: 1.5; margin: 0; color: #ffff55; }
+  #toggle { flex: none; padding: 0 8px; font-size: 16px; }
+  #menuBtn { display: none; position: fixed; top: 12px; left: 12px; padding: 6px 12px; font-size: 20px; flex: none; }
+  #gen.collapsed ~ #menuBtn { display: block; }
+  .tabs { display: flex; gap: 0; margin: 0 -2px 4px; }
+  .tab { font-size: 17px; padding: 4px 2px; background: #3a3a3a; color: #bdbdbd; box-shadow: inset 2px 2px 0 #555, inset -2px -2px 0 #222; }
+  .tab.on { background: #6f6f6f; color: #ffff55; box-shadow: inset 2px 2px 0 #a9a9a9, inset -2px -3px 0 #4a4a4a; }
+  .pane { display: none; }
+  .pane.on { display: block; }
+  .two { display: grid; grid-template-columns: 2fr 1fr; gap: 6px; }
+  .two.even { grid-template-columns: 1fr 1fr; }
+  kbd { display: inline-block; min-width: 22px; padding: 0 5px; border: 2px solid #000; background: #6f6f6f; color: #fff; text-align: center;
+    font: 16px "VT323", monospace; box-shadow: inset 1px 1px 0 #a9a9a9, inset -1px -2px 0 #4a4a4a; text-shadow: 1px 1px 0 #383838; }
+  .keys { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; align-items: center; margin-bottom: 10px; }
+  .keys kbd { justify-self: start; }
   #gen label { display: block; color: var(--muted); margin: 7px 0 2px; }
   #gen input, #gen select { width: 100%; padding: 3px 6px; border: 2px solid #a0a0a0; border-radius: 0; background: #000; color: var(--text); font: inherit; outline: none; }
   #gen input:focus, #gen select:focus { border-color: #fff; }
@@ -28,12 +44,11 @@
   #gen label.check input { width: auto; }
   .row { display: flex; gap: 6px; margin-top: 10px; }
   button { flex: 1; padding: 5px 6px; border: 2px solid #000; border-radius: 0; background: #6f6f6f; color: #e0e0e0; cursor: pointer;
-    font: inherit; font-size: 20px; text-shadow: 2px 2px 0 #383838; box-shadow: inset 2px 2px 0 #a9a9a9, inset -2px -3px 0 #4a4a4a; }
+    font: inherit; font-size: 20px; white-space: nowrap; text-shadow: 2px 2px 0 #383838; box-shadow: inset 2px 2px 0 #a9a9a9, inset -2px -3px 0 #4a4a4a; }
   button:hover { background: #7a85c6; color: #ffffa0; box-shadow: inset 2px 2px 0 #b5bff3, inset -2px -3px 0 #4b538f; }
   button:active { box-shadow: inset 2px 2px 0 #4a4a4a, inset -2px -2px 0 #a9a9a9; }
   button.primary { background: #3c8527; box-shadow: inset 2px 2px 0 #6fbf4a, inset -2px -3px 0 #245218; }
   button.primary:hover { background: #4a9e31; color: #ffffa0; }
-  #toggle { display: none; }
   #gen { max-height: calc(100vh - 24px); overflow-y: auto; }
   .modal { position: fixed; inset: 0; z-index: 10; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,.5); }
   .modal.open { display: flex; }
@@ -61,7 +76,7 @@
     -webkit-mask-image: radial-gradient(circle at 50% 50%, transparent 22%, #000 55%); mask-image: radial-gradient(circle at 50% 50%, transparent 22%, #000 55%); }
   #title { background: rgba(0,0,0,.35); }
   .modal > .panel { background: rgba(24,24,24,.94); }
-  body.title-open #gen, body.title-open #hud, body.title-open #help, body.title-open #emotes, body.title-open #jumpBtn { display: none; }
+  body.title-open #gen, body.title-open #hud, body.title-open #help, body.title-open #emotes, body.title-open #jumpBtn, body.title-open #menuBtn { display: none !important; }
   #title .panel { text-align: center; width: min(420px, calc(100vw - 32px)); }
   #title h1 { margin: 6px 0 12px; font-family: "Press Start 2P", monospace; font-size: clamp(28px, 8vw, 40px); line-height: 1.25; color: #ffff55;
     text-shadow: 4px 4px 0 #3f3f00, 8px 8px 0 rgba(0,0,0,.35); animation: logoBob 1.6s ease-in-out infinite; }
@@ -74,9 +89,16 @@
   .checks label { display: flex; align-items: center; gap: 6px; }
   #countdown { position: fixed; top: 34%; left: 50%; transform: translate(-50%, -50%); z-index: 6; display: none; pointer-events: none;
     font-family: "Press Start 2P", monospace; font-size: 64px; color: #ffff55; text-shadow: 5px 5px 0 #000; }
-  #hud { top: 12px; right: 12px; text-align: right; line-height: 1.3; min-width: 150px; font-size: 22px; }
+  #hud { top: 12px; right: 12px; line-height: 1.25; width: 190px; font-size: 21px; padding: 10px 12px; }
   #hud b { font-family: "Press Start 2P", monospace; font-size: 18px; color: #ffff55; }
-  #help { bottom: 12px; left: 12px; color: #d0d0d0; font-size: 18px; }
+  .hudStage { display: flex; align-items: baseline; gap: 4px; }
+  .hudStage .lbl { font-family: "Press Start 2P", monospace; font-size: 10px; color: #c8c8c8; margin-right: auto; }
+  .bar { height: 8px; margin: 5px 0 6px; background: #1a1a1a; border: 2px solid #000; box-shadow: inset 0 0 0 1px #3a3a3a; }
+  .bar i { display: block; height: 100%; width: 0; background: linear-gradient(#7ee070, #3c8527); transition: width .4s; }
+  .hudRow { display: flex; justify-content: space-between; }
+  #hud .net { font-size: 17px; margin-top: 3px; }
+  #powerHud:empty, #bestHud:empty { display: none; }
+  #help { bottom: 12px; left: 12px; color: #d0d0d0; font-size: 17px; padding: 6px 10px; cursor: pointer; }
   #emotes { bottom: 64px; left: 50%; transform: translateX(-50%); display: flex; gap: 4px; padding: 6px; }
   #emotes button { flex: none; position: relative; width: 44px; height: 44px; padding: 0; font-size: 22px; text-shadow: none; }
   #emotes button small { position: absolute; top: 1px; left: 4px; font-size: 13px; color: #fff; text-shadow: 1px 1px 0 #000; }
@@ -110,91 +132,106 @@
     #chatIn { bottom: auto; top: 12px; z-index: 5; }
   }
   @media (max-width: 640px) {
-    #gen { width: calc(100% - 24px); }
-    #gen.collapsed > :not(#toggle) { display: none; }
-    #toggle { display: block; position: absolute; top: 6px; right: 6px; flex: none; padding: 0 10px; }
-    #hud { top: auto; bottom: 130px; right: 12px; }
+    #gen { width: calc(100% - 24px); max-height: 70vh; z-index: 4; }
+    #emotes { flex-wrap: wrap; justify-content: center; width: calc(100% - 24px); }
+    #help { display: none; }
+    #hud { width: 160px; font-size: 18px; top: 12px; }
+    #menuBtn { font-size: 18px; }
   }
 </style>
 </head>
 <body class="title-open">
 <div id="speedLines"></div>
 <div id="gen" class="panel">
-  <button id="toggle">☰</button>
-  <h1>Blocky Obby</h1>
-  <label for="nick">Your name</label>
-  <input id="nick" maxlength="16">
-  <label for="seed">Seed</label>
-  <input id="seed" value="obby">
-  <label for="stages">Stages</label>
-  <input id="stages" type="number" min="3" max="60" value="12">
-  <label for="diff">Difficulty</label>
-  <select id="diff">
-    <option value="easy">Easy</option>
-    <option value="normal" selected>Normal</option>
-    <option value="hard">Hard</option>
-  </select>
-  <label for="world">World</label>
-  <select id="world"></select>
-  <label for="skin">Character</label>
-  <select id="skin"></select>
-  <label for="styleSel">Style</label>
-  <select id="styleSel"></select>
-  <details id="custom">
-    <summary>🎨 Customize colors</summary>
-    <div class="swatches">
-      <label>Skin<input type="color" id="c_skin"></label>
-      <label>Shirt<input type="color" id="c_torso"></label>
-      <label>Pants<input type="color" id="c_legs"></label>
-      <label>Cape<input type="color" id="c_cape"></label>
-      <label>Hat<input type="color" id="c_hat"></label>
+  <div class="genHead">
+    <h1>Blocky Obby</h1>
+    <button id="toggle" title="Hide menu (Tab)">◀</button>
+  </div>
+  <div class="tabs">
+    <button class="tab" data-tab="course">🗺️ Course</button>
+    <button class="tab" data-tab="me">🧍 You</button>
+    <button class="tab" data-tab="online">🌐 Online</button>
+  </div>
+  <div class="pane" data-pane="course">
+    <div class="two">
+      <div><label for="seed">Seed</label><input id="seed" value="obby"></div>
+      <div><label for="stages">Stages</label><input id="stages" type="number" min="3" max="60" value="12"></div>
     </div>
-    <label for="trailSel">Trail</label>
-    <select id="trailSel">
-      <option value="rainbow">🌈 Rainbow</option>
-      <option value="fire">🔥 Fire</option>
-      <option value="sparkle">✨ Sparkle</option>
-      <option value="torso">Shirt color</option>
-      <option value="cape">Cape color</option>
-      <option value="hat">Hat color</option>
-    </select>
-    <label class="check"><input type="checkbox" id="glow"> Neon glow</label>
-  </details>
-  <div class="row">
-    <button id="randBtn">🎲 Random</button>
-    <button id="genBtn" class="primary">Generate</button>
+    <div class="two even">
+      <div><label for="diff">Difficulty</label>
+        <select id="diff">
+          <option value="easy">Easy</option>
+          <option value="normal" selected>Normal</option>
+          <option value="hard">Hard</option>
+        </select></div>
+      <div><label for="world">World</label><select id="world"></select></div>
+    </div>
+    <div class="row">
+      <button id="randBtn">🎲 Random</button>
+      <button id="genBtn" class="primary">▶ Generate</button>
+    </div>
+    <div class="row">
+      <button id="dailyBtn">📅 Daily</button>
+      <button id="skipBtn" title="Skip to the next checkpoint">⏭ Skip</button>
+      <button id="linkBtn" title="Copy a link to this course">🔗 Link</button>
+    </div>
   </div>
-  <div class="row">
-    <button id="dailyBtn">📅 Daily</button>
-    <button id="shopBtn">🛒 Shop</button>
-    <button id="badgeBtn" title="Badges">🏅</button>
-    <button id="setBtn" title="Settings">⚙️</button>
+  <div class="pane" data-pane="me">
+    <label for="nick">Your name</label>
+    <input id="nick" maxlength="16">
+    <div class="two even">
+      <div><label for="skin">Character</label><select id="skin"></select></div>
+      <div><label for="styleSel">Style</label><select id="styleSel"></select></div>
+    </div>
+    <details id="custom">
+      <summary>🎨 Customize colors</summary>
+      <div class="swatches">
+        <label>Skin<input type="color" id="c_skin"></label>
+        <label>Shirt<input type="color" id="c_torso"></label>
+        <label>Pants<input type="color" id="c_legs"></label>
+        <label>Cape<input type="color" id="c_cape"></label>
+        <label>Hat<input type="color" id="c_hat"></label>
+      </div>
+      <label for="trailSel">Trail</label>
+      <select id="trailSel">
+        <option value="rainbow">🌈 Rainbow</option>
+        <option value="fire">🔥 Fire</option>
+        <option value="sparkle">✨ Sparkle</option>
+        <option value="torso">Shirt color</option>
+        <option value="cape">Cape color</option>
+        <option value="hat">Hat color</option>
+      </select>
+      <label class="check"><input type="checkbox" id="glow"> Neon glow</label>
+    </details>
+    <div class="row">
+      <button id="shopBtn">🛒 Shop</button>
+      <button id="badgeBtn">🏅 Badges</button>
+    </div>
   </div>
-  <div class="row">
-    <button id="skipBtn">Skip stage</button>
-    <button id="linkBtn">Copy link</button>
-  </div>
-  <div class="row">
-    <button id="soundBtn">🔊 Sound</button>
-    <button id="musicBtn">🎵 Music</button>
-  </div>
-  <div class="row">
-    <button id="raceBtn">🏁 Race</button>
-    <button id="netBtn" class="primary">🌐 Multiplayer on</button>
-  </div>
-  <div class="row">
-    <button id="srvBtn" class="primary">🖥️ Servers</button>
+  <div class="pane" data-pane="online">
+    <div class="row"><button id="netBtn" class="primary">🌐 Multiplayer on</button></div>
+    <div class="row">
+      <button id="srvBtn">🖥️ Servers</button>
+      <button id="raceBtn">🏁 Race</button>
+    </div>
+    <div class="row">
+      <button id="soundBtn">🔊 Sound</button>
+      <button id="musicBtn">🎵 Music</button>
+      <button id="setBtn" title="Settings">⚙️</button>
+    </div>
   </div>
 </div>
+<button id="menuBtn" title="Show menu (Tab)">☰ Menu</button>
 <div id="hud" class="panel">
-  Stage <b id="stage">0</b> / <span id="total">0</span><br>
-  ⏱ <span id="time">0.0</span>s &nbsp; 💀 <span id="deaths">0</span><br>
-  🪙 <span id="runCoins">0</span> <span class="dim">· 💰 <span id="wallet">0</span></span><br>
-  <span id="bestHud" class="dim"></span>
+  <div class="hudStage"><span class="lbl">STAGE</span> <b id="stage">0</b><span class="dim"> / <span id="total">0</span></span></div>
+  <div class="bar"><i id="stageBar"></i></div>
+  <div class="hudRow"><span>⏱ <span id="time">0.0</span>s</span><span>💀 <span id="deaths">0</span></span></div>
+  <div class="hudRow"><span>🪙 <span id="runCoins">0</span></span><span class="dim">💰 <span id="wallet">0</span></span></div>
+  <div id="bestHud" class="dim"></div>
   <div id="powerHud"></div>
-  🌐 <span id="online">connecting…</span>
+  <div class="dim net">🌐 <span id="online">connecting…</span></div>
 </div>
-<div id="help" class="panel">WASD move · Space jump (again in air = double jump) · Click + mouse to look · Wheel zoom · R respawn · M music · 1-9 emotes · X explode · T chat · jump off walls to wall-jump · walk into ladders to climb · AFK = 💤 · 🪙 coins buy hats in the 🛒 shop</div>
+<div id="help" class="panel"><kbd>H</kbd> controls &nbsp; <kbd>Tab</kbd> menu</div>
 <div id="emotes" class="panel"></div>
 <div id="chat" class="panel"></div>
 <input id="chatIn" maxlength="80" placeholder="Say something… (Enter to send, Esc to cancel)">
@@ -247,6 +284,24 @@
   <h3>🐾 Pets</h3>
   <div id="petItems"></div>
   <div class="row"><button class="close">Close</button></div>
+</div></div>
+<div id="controlsM" class="modal"><div class="panel">
+  <h2>🎮 Controls</h2>
+  <div class="keys">
+    <kbd>W A S D</kbd><span>Move</span>
+    <kbd>Space</kbd><span>Jump · again in the air to double jump · next to a wall to wall-jump</span>
+    <kbd>Mouse</kbd><span>Look around (click the game first) · wheel to zoom</span>
+    <kbd>Q E</kbd><span>Turn the camera</span>
+    <kbd>1 – 9</kbd><span>Emotes</span>
+    <kbd>X</kbd><span>Explode 💥</span>
+    <kbd>T</kbd><span>Chat</span>
+    <kbd>R</kbd><span>Back to the last checkpoint</span>
+    <kbd>M</kbd><span>Music on / off</span>
+    <kbd>Tab</kbd><span>Show / hide the menu</span>
+    <kbd>H</kbd><span>This screen</span>
+  </div>
+  <p>Walk into ladders and vines to climb. Pull levers to make hidden platforms appear. Grab 🪙 coins to spend in the 🛒 shop. Stand still for 20 seconds and you fall asleep 💤.</p>
+  <div class="row"><button class="close primary">Got it</button></div>
 </div></div>
 <div id="badgesM" class="modal"><div class="panel">
   <h2>🏅 Badges</h2>
@@ -3462,7 +3517,24 @@ const toggleMusic = () => {
 };
 $('musicBtn').onclick = e => { toggleMusic(); e.target.blur(); };
 addEventListener('keydown', e => { if (e.code === 'KeyM' && e.target.tagName !== 'INPUT') toggleMusic(); });
-$('toggle').onclick =() => $('gen').classList.toggle('collapsed');
+// menu: three tabs, and it folds away to a small Menu button (Tab key) so the game has room
+function setTab(name) {
+  for (const t of document.querySelectorAll('.tab')) t.classList.toggle('on', t.dataset.tab === name);
+  for (const p of document.querySelectorAll('.pane')) p.classList.toggle('on', p.dataset.pane === name);
+  store.set('obbyTab', name);
+}
+for (const t of document.querySelectorAll('.tab')) t.onclick = () => { setTab(t.dataset.tab); t.blur(); };
+setTab(['course', 'me', 'online'].includes(store.get('obbyTab', 'course')) ? store.get('obbyTab', 'course') : 'course');
+function setMenu(open) { $('gen').classList.toggle('collapsed', !open); store.set('obbyMenu', open); }
+$('toggle').onclick = e => { setMenu(false); e.target.blur(); };
+$('menuBtn').onclick = e => { setMenu(true); e.target.blur(); };
+const openControls = () => { $('controlsM').classList.add('open'); document.exitPointerLock?.(); };
+$('help').onclick = openControls;
+addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.repeat) return;
+  if (e.code === 'Tab') { e.preventDefault(); setMenu($('gen').classList.contains('collapsed')); }
+  if (e.code === 'KeyH') $('controlsM').classList.contains('open') ? $('controlsM').classList.remove('open') : openControls();
+});
 for (const id of ['seed', 'stages']) $(id).addEventListener('keydown', e => { if (e.key === 'Enter') start(); });
 
 // ---------- Multiplayer ----------
@@ -3916,7 +3988,7 @@ if (['easy', 'normal', 'hard'].includes(params.get('d'))) $('diff').value = para
 $('world').value = Object.hasOwn(THEMES, params.get('w')) ? params.get('w') : 'auto';
 mp.server = cleanServer(params.get('s')) || MAIN_SERVER; mp.pinServer = true;
 $('world').onchange = e => { start(); e.target.blur(); };
-if (innerWidth <= 640) $('gen').classList.add('collapsed');
+setMenu(innerWidth > 640 && store.get('obbyMenu', true));
 start();
 
 // ---------- Main loop ----------
@@ -4166,6 +4238,7 @@ function frame(now) {
   $('bestHud').style.display = best ? 'block' : 'none';
   $('powerHud').textContent = pl.power ? `${POWERS[pl.power.type].icon} ${POWERS[pl.power.type].name} ${pl.power.t.toFixed(1)}s` : '';
   $('stage').textContent = cpIndex;
+  $('stageBar').style.width = (totalStages ? cpIndex / totalStages * 100 : 0) + '%';
   $('time').textContent = elapsed.toFixed(1);
   $('deaths').textContent = deaths;
   renderer.render(scene, camera);

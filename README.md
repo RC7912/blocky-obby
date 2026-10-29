@@ -51,6 +51,8 @@ A Minecraft-style obby (obstacle course) generator that runs in your browser —
 | T or Enter | Chat |
 | R | Respawn at checkpoint |
 | M | Music on/off |
+| Tab | Show / hide the menu |
+| H | Controls screen |
 
 On phones: drag the left side of the screen to move, drag the right side to look, and tap **JUMP**.
 
