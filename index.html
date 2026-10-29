@@ -2470,10 +2470,66 @@ const SFX = {
   firework: sfx(() => { noiseHit(0.5, 0.12, 2500, 0, 'highpass'); tone('sine', 220, 70, 0.3, 0.12); }),
 };
 
-const rattle = sfx(() => { for (let i = 0; i < 5; i++) noiseHit(0.03, 0.12, 2200 + Math.random() * 1500, i * 0.035, 'bandpass'); });
 const beeps = sfx(() => { for (let i = 0; i < 3; i++) tone('square', 1760, 1760, 0.12, 0.06, i * 0.2); });
-const squeak = sfx(() => { tone('sine', 1100, 1900, 0.1, 0.09); tone('sine', 1900, 1300, 0.12, 0.07, 0.09); });
 const flush = sfx(() => { noiseHit(1.2, 0.35, 900, 0, 'bandpass'); noiseHit(0.8, 0.2, 400, 0.4); tone('sine', 300, 120, 0.9, 0.06, 0.2); });
+
+// ---------- Character sounds ----------
+// Every character has its own jump sound and an idle sound it makes every few seconds while
+// you stand still. Costume bodies are keyed by style, the colour skins by skin.
+const rnd = (a, b) => a + Math.random() * (b - a);
+const CHAR_SFX = {
+  classic: { jump: () => tone('square', 300, 620, 0.12, 0.05),
+    idle: () => { tone('triangle', 523, 523, 0.09, 0.05); tone('triangle', 659, 659, 0.12, 0.05, 0.11); } },        // whistle
+  neon: { jump: () => tone('sawtooth', 1800, 300, 0.15, 0.045),                                                     // laser zap
+    idle: () => [880, 1100, 1320].forEach((f, i) => tone('square', f, f, 0.06, 0.03, i * 0.08)) },                 // synth arp
+  ninja: { jump: () => noiseHit(0.18, 0.2, 3000, 0, 'bandpass'),                                                    // swish
+    idle: () => noiseHit(0.6, 0.06, 900, 0, 'bandpass') },                                                          // wind
+  gold: { jump: () => { tone('square', 988, 988, 0.06, 0.04); tone('square', 1319, 1319, 0.15, 0.04, 0.06); },      // coin
+    idle: () => [1568, 1976, 2349].forEach((f, i) => tone('sine', f, f, 0.45, 0.03, i * 0.08)) },                  // treasure chime
+  fire: { jump: () => { noiseHit(0.3, 0.22, 700); tone('sawtooth', 120, 320, 0.2, 0.03); },                         // whoosh
+    idle: () => { for (let i = 0; i < 7; i++) noiseHit(0.04, 0.07, rnd(2000, 4000), i * 0.07 + rnd(0, 0.03), 'bandpass'); } },   // crackle
+  ocean: { jump: () => tone('sine', 300, 900, 0.15, 0.1),                                                           // bloop
+    idle: () => { tone('sine', 500, 1200, 0.08, 0.06); tone('sine', 700, 1500, 0.08, 0.05, 0.25); } },             // bubbles
+  candy: { jump: () => [1047, 1319, 1568].forEach((f, i) => tone('triangle', f, f, 0.12, 0.04, i * 0.04)),          // sparkle
+    idle: () => { tone('sine', 2093, 2093, 0.5, 0.03); tone('sine', 2637, 2637, 0.4, 0.02, 0.15); } },
+  toxic: { jump: () => { tone('sine', 200, 800, 0.1, 0.08); noiseHit(0.05, 0.1, 1500, 0.08, 'bandpass'); },         // pop
+    idle: () => { for (let i = 0; i < 4; i++) tone('sine', rnd(150, 260), rnd(300, 500), 0.07, 0.06, i * rnd(0.1, 0.18)); } },   // gurgle
+  bigboned: { jump: () => tone('sawtooth', 170, 110, 0.15, 0.06),                                                   // hup
+    idle: () => tone('sawtooth', 120, 90, 0.5, 0.04) },                                                             // hmmm
+  creeper: { jump: () => noiseHit(0.25, 0.12, 6000, 0, 'highpass'),                                                 // tss
+    idle: () => noiseHit(0.9, 0.05, 5000, 0, 'highpass') },                                                         // ssssss
+  enderman: { jump: () => { tone('sine', 900, 200, 0.3, 0.08); tone('triangle', 1200, 300, 0.3, 0.03); },           // vwoop
+    idle: () => { tone('sine', 260, 180, 0.7, 0.05); tone('sine', 300, 150, 0.7, 0.03, 0.05); } },                 // low warble
+  clippy: { jump: () => tone('triangle', 400, 1200, 0.2, 0.06),                                                     // spring twang
+    idle: () => { tone('sine', 660, 660, 0.1, 0.05); tone('sine', 880, 880, 0.14, 0.05, 0.12); } },                // "hi there!"
+  crewmate: { jump: () => tone('square', 600, 900, 0.08, 0.04),                                                     // blip
+    idle: () => { tone('sine', 1200, 600, 0.15, 0.04); tone('sine', 600, 1200, 0.15, 0.04, 0.2); } },              // beep-bloop
+  banana: { jump: () => tone('sine', 500, 1600, 0.3, 0.06),                                                         // slide whistle up
+    idle: () => tone('sine', 1400, 500, 0.45, 0.05) },                                                              // and back down
+  ogre: { jump: () => { tone('sawtooth', 140, 100, 0.15, 0.07); noiseHit(0.1, 0.08, 400); },                        // grunt
+    idle: () => { tone('sawtooth', 110, 70, 0.55, 0.07); noiseHit(0.5, 0.1, 300); } },                             // burp
+  toilet: { jump: () => { noiseHit(0.25, 0.2, 1800, 0, 'bandpass'); tone('sine', 600, 200, 0.15, 0.05); },          // splash
+    idle: () => { tone('sine', 1500, 600, 0.06, 0.06); tone('sine', 1400, 550, 0.06, 0.05, 0.35); } },             // drip drip
+  duck: { jump: () => { tone('sine', 1100, 1900, 0.1, 0.09); tone('sine', 1900, 1300, 0.12, 0.07, 0.09); },         // squeak
+    idle: () => [0, 0.2].forEach(d => { tone('sawtooth', 620, 420, 0.13, 0.05, d); noiseHit(0.1, 0.05, 900, d, 'bandpass'); }) },   // quack quack
+  microwave: { jump: () => tone('square', 1760, 1760, 0.08, 0.04),                                                  // beep (it hums when idle)
+    idle: () => {} },
+  skeleton: { jump: () => { for (let i = 0; i < 5; i++) noiseHit(0.03, 0.12, rnd(2200, 3700), i * 0.035, 'bandpass'); },   // rattle
+    idle: () => { for (let i = 0; i < 3; i++) noiseHit(0.03, 0.06, rnd(2200, 3700), i * 0.08, 'bandpass'); } },
+};
+const charKey = () => COSTUMES[myStyle] ? myStyle : Object.hasOwn(CHAR_SFX, $('skin').value) ? $('skin').value : 'classic';
+// plays the character's sound; false if sound is off so the caller can fall back
+function charSfx(kind) {
+  if (!(soundOn && actx && actx.state === 'running')) return false;
+  CHAR_SFX[charKey()][kind]();
+  return true;
+}
+let idleSndT = 0, nextIdleSnd = 3;
+function updateIdleSounds(dt, still) {
+  if (!still) { idleSndT = 0; nextIdleSnd = 3; return; }
+  idleSndT += dt;
+  if (idleSndT > nextIdleSnd) { charSfx('idle'); nextIdleSnd = idleSndT + rnd(4.5, 6.5); }
+}
 
 // ---------- World songs ----------
 // Every world has its own original loop, composed here in code (so it's copyright-free):
@@ -3025,9 +3081,8 @@ function stepPlayer(h) {
   if (!frozen && (keys.Space || touchJump) && pl.grounded) {
     pl.vy = jump; pl.grounded = false;
     burst(pl.x, pl.y - PH, pl.z, 6, 5, tmpColor.set(0xffffff), 0.4, 0.4, 0);
-    SFX.jump(); fx.sq.v += 9;
-    if (myStyle === 'duck') squeak();
-    if (myStyle === 'skeleton') rattle();
+    if (!charSfx('jump')) SFX.jump();
+    fx.sq.v += 9;
   } else if (!frozen && jumpQueued && !pl.grounded && pl.wallT > 0) {
     // wall jump: kick off the wall, up and away
     pl.vy = jump; pl.ex = pl.wallN.x * 15; pl.ez = pl.wallN.z * 15; pl.extDrag = 3; pl.wallT = 0; pl.airJumps = 1;
@@ -3035,8 +3090,7 @@ function stepPlayer(h) {
     burst(pl.x - pl.wallN.x, pl.y, pl.z - pl.wallN.z, 8, 5, tmpColor.set(0xdddddd), 0.4, 0.4, 0);
   } else if (jumpQueued && !pl.grounded && pl.airJumps > 0) {
     pl.vy = jump * 0.95; pl.airJumps--;
-    trick(); fx.sq.v += 10; fx.fovKick = 1; SFX.double();
-    if (myStyle === 'duck') squeak();
+    trick(); fx.sq.v += 10; fx.fovKick = 1; SFX.double(); charSfx('jump');
     if (Math.random() < 0.35) meme('air');
     for (let i = 0; i < 18; i++) {
       const a = i / 18 * Math.PI * 2;
@@ -3959,6 +4013,7 @@ function frame(now) {
 
   if (asleep && (now - lastInput) / 1000 <= SLEEP_AFTER) { asleep = false; fx.sq.v += 10; fx.pop.v += 20; }
   updateZzz(dt); updateChime(); updateMicrowave(dt, pl.grounded && !moving);
+  updateIdleSounds(dt, pl.grounded && !moving && !emote && !asleep && !document.body.classList.contains('title-open'));
   // the title screen keeps playing; in the game it goes quiet while you stand still
   updateMusicFade(dt, pl.grounded && !moving && !emote && !document.body.classList.contains('title-open'));
 
