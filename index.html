@@ -1635,6 +1635,10 @@ const SKINS = {
   ocean:   { name: 'Ocean Wave', skin: 0xbfe9ff, torso: 0x0077b6, legs: 0x023e8a, cape: 0x00b4d8, hat: 0xffffff, glow: 0.2, trail: 'cape' },
   candy:   { name: 'Cotton Candy', skin: 0xffe5ec, torso: 0xff8fab, legs: 0xa2d2ff, cape: 0xcdb4db, hat: 0xffc8dd, glow: 0, trail: 'rainbow' },
   toxic:   { name: 'Toxic', skin: 0x9ef01a, torso: 0x1b1b1b, legs: 0x38b000, cape: 0x70e000, hat: 0x1b1b1b, glow: 0.6, trail: 'cape' },
+  clippy: { name: '📎 Paperclip Helper', skin: 0xc9ced6, torso: 0xc9ced6, legs: 0x8a9099, cape: 0x8a9099, hat: 0xc9ced6, glow: 0, trail: 'sparkle', style: 'clippy' },
+  crewmate: { name: '🧑‍🚀 Crewmate', skin: 0xc51111, torso: 0xc51111, legs: 0x7a0838, cape: 0x7a0838, hat: 0x9fd8f0, glow: 0, trail: 'torso', style: 'crewmate' },
+  banana: { name: '🍌 Banana', skin: 0xffe135, torso: 0xffe135, legs: 0x2a2a2a, cape: 0x2a2a2a, hat: 0x6b4a1e, glow: 0, trail: 'hat', style: 'banana' },
+  ogre: { name: '👹 Swamp Ogre', skin: 0x8db33a, torso: 0x6b4a2a, legs: 0x5a3e22, cape: 0x3a2a1a, hat: 0x8db33a, glow: 0, trail: 'hat', style: 'ogre' },
   creeper: { name: '💚 Creeper', skin: 0x5ac94f, torso: 0x3fa53a, legs: 0x2f8a2a, cape: 0x1a1a1a, hat: 0x5ac94f, glow: 0, trail: 'torso', style: 'creeper' },
   bigboned: { name: 'Big Boned', skin: 0xf6d2ae, torso: 0xd7262e, legs: 0x7b4a24, cape: 0xf3c70f, hat: 0x17b3ae, glow: 0, trail: 'cape' },
 };
@@ -1696,6 +1700,13 @@ const makeMats = () => ({
   creeper: phong({ map: creeperTex }),
   creeperFace: phong({ map: creeperFaceTex }),
   creeperFeet: phong({ map: creeperTex, color: 0x8a8a8a }),
+  // shiny / plain parts for the costume bodies; metal, suit and peel follow the skin colours
+  metal: new THREE.MeshPhongMaterial({ specular: 0xffffff, shininess: 90 }),
+  suit: new THREE.MeshPhongMaterial({ specular: 0x444444, shininess: 40 }),
+  peel: new THREE.MeshPhongMaterial({ specular: 0x332a10, shininess: 20 }),
+  visor: new THREE.MeshPhongMaterial({ color: 0x9fd8f0, specular: 0xffffff, shininess: 120 }),
+  shirt: phong({ color: 0xe2d6b4 }),
+  boot: phong({ color: 0x2a2018 }),
 });
 const mats = makeMats();
 let currentSkin = SKINS.classic;
@@ -1711,11 +1722,22 @@ function paintMats(mats, s) {
     mats.flat[k].color.copy(mats[k].color);
   }
   mats.torsoFront.color.copy(mats.torso.color); mats.torsoFront.emissive.copy(mats.torso.emissive);
+  mats.metal.color.set(s.skin); mats.peel.color.set(s.skin);
+  mats.suit.color.set(s.torso); mats.suit.emissive.set(s.torso).multiplyScalar(s.glow);
 }
 
 // STYLES: how a character is built. Every style has the same joints (body, head, limbs,
 // two-piece cape) at the same height, so animation, emotes and multiplayer work unchanged.
-const STYLES = { roblox: '🧱 Roblox', southpark: '✂️ South Park', creeper: '💚 Creeper' };
+const STYLES = { roblox: '🧱 Roblox', southpark: '✂️ South Park', creeper: '💚 Creeper',
+  clippy: '📎 Paperclip', crewmate: '🧑‍🚀 Crewmate', banana: '🍌 Banana', ogre: '👹 Ogre' };
+// costume bodies: [rig builder, hat anchor position, hat scale]
+const COSTUMES = {
+  creeper: [(b, m, p) => creeperRig(b, m, p), [0, 1.6, 0], 1.3],
+  clippy: [(b, m, p) => clippyRig(b, m, p), [0, 1.25, 0], 0.9],
+  crewmate: [(b, m, p) => crewmateRig(b, m, p), [0, 1.5, 0], 1.3],
+  banana: [(b, m, p) => bananaRig(b, m, p), [0.6, 1.8, 0], 0.8],
+  ogre: [(b, m, p) => ogreRig(b, m, p), [0, 1.4, 0], 1.2],
+};
 const cleanStyle = st => Object.hasOwn(STYLES, st) ? st : 'roblox';
 function makeCharacter(mats, style = 'roblox') {
   const root = new THREE.Group();
@@ -1730,11 +1752,11 @@ function buildBody(root, mats, style) {
   root.add(body);
   const pivot = (x, y, z, parent = body) => { const p = new THREE.Group(); p.position.set(x, y, z); parent.add(p); return p; };
   const joints = style === 'southpark' ? southParkRig(body, mats, pivot)
-    : style === 'creeper' ? creeperRig(body, mats, pivot) : robloxRig(body, mats, pivot);
+    : COSTUMES[style] ? COSTUMES[style][0](body, mats, pivot) : robloxRig(body, mats, pivot);
   // shop hats sit on top of the head; the South Park head is much bigger, so they scale up
   const hatAnchor = new THREE.Group();
   if (style === 'southpark') { hatAnchor.position.set(0, 2.55, 0.3); hatAnchor.scale.set(3, 2.2, 2.6); }
-  else if (style === 'creeper') { hatAnchor.position.set(0, 1.6, 0); hatAnchor.scale.setScalar(1.3); }
+  else if (COSTUMES[style]) { hatAnchor.position.set(...COSTUMES[style][1]); hatAnchor.scale.setScalar(COSTUMES[style][2]); }
   else hatAnchor.position.set(0, 1.2, 0);
   joints.head.add(hatAnchor);
   Object.assign(root.userData, { body, style, hatAnchor, ...joints });
@@ -1766,6 +1788,110 @@ function robloxRig(body, mats, pivot) {
   const capeLow = pivot(0, -1.4, 0, capeTop);
   mk(1.8, 1.3, 0.08, mats.cape, 0, -0.65, 0, capeLow);
   return { head, legL, legR, armL, armR, capeTop, capeLow };
+}
+// shared helper for the costume rigs: a mesh at (x, y, z) under parent, optionally scaled
+function rigMesh(geo, mat, x, y, z, parent, scale) {
+  const m = new THREE.Mesh(geo, mat);
+  m.position.set(x, y, z); if (scale) m.scale.set(...scale);
+  m.castShadow = true; parent.add(m); return m;
+}
+// googly eyes looking forward: white balls with black pupils
+function googlyEyes(mats, parent, gap, y, z, r) {
+  for (const sx of [-1, 1]) {
+    rigMesh(new THREE.SphereGeometry(r, 20, 14), mats.eye, sx * gap, y, z, parent);
+    rigMesh(new THREE.SphereGeometry(r * 0.45, 14, 10), mats.ink, sx * gap * 0.92, y - r * 0.1, z + r * 0.75, parent);
+  }
+}
+// the arm / cape joints a costume has no use for still have to exist for the animation
+const emptyJoints = (pivot, j) => Object.assign({
+  armL: pivot(-0.8, 0.9, 0), armR: pivot(0.8, 0.9, 0), legL: pivot(-0.4, -1.3, 0), legR: pivot(0.4, -1.3, 0),
+}, j, (() => { const capeTop = pivot(0, 1.0, -0.42); return { capeTop, capeLow: pivot(0, -1.4, 0, capeTop) }; })());
+
+// a bent silver paperclip with big googly eyes and expressive eyebrows
+function clippyRig(body, mats, pivot) {
+  const pts = [];
+  const seg = (x, y0, y1) => { for (let i = 0; i <= 8; i++) pts.push(new THREE.Vector3(x, y0 + (y1 - y0) * i / 8, 0)); };
+  const arc = (cx, cy, r, a0, a1) => { for (let i = 1; i < 16; i++) { const a = a0 + (a1 - a0) * i / 16; pts.push(new THREE.Vector3(cx + Math.cos(a) * r, cy + Math.sin(a) * r, 0)); } };
+  seg(-0.45, -1.9, 1.3); arc(0, 1.3, 0.45, Math.PI, 0); seg(0.45, 1.3, -1.5);
+  arc(0.1, -1.5, 0.35, 0, -Math.PI); seg(-0.25, -1.5, 0.8); arc(0, 0.8, 0.25, Math.PI, 0); seg(0.25, 0.8, -0.9);
+  rigMesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 260, 0.075, 10), mats.metal, 0, 0, 0, body, [1.25, 1.25, 1.25]);
+  const head = pivot(0, 1.0, 0);
+  googlyEyes(mats, head, 0.32, 0.25, 0.2, 0.27);
+  for (const sx of [-1, 1]) rigMesh(new THREE.BoxGeometry(0.38, 0.08, 0.08), mats.ink, sx * 0.32, 0.66, 0.25, head).rotation.z = sx * 0.3;
+  return emptyJoints(pivot, { head });
+}
+// bean-shaped space crewmate: suit in the shirt colour, glossy visor, backpack, stubby legs
+function crewmateRig(body, mats, pivot) {
+  const C = mats.suit;
+  rigMesh(new THREE.CylinderGeometry(1.1, 1.1, 2.2, 32), C, 0, 0.4, 0, body, [1, 1, 0.85]);
+  rigMesh(new THREE.SphereGeometry(1.1, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2), C, 0, 1.5, 0, body, [1, 1, 0.85]);
+  rigMesh(new THREE.SphereGeometry(1.1, 32, 16, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), C, 0, -0.7, 0, body, [1, 0.5, 0.85]);
+  rigMesh(new THREE.BoxGeometry(1.3, 1.7, 0.7), C, 0, 0.5, -1.05, body);
+  const head = pivot(0, 1.1, 0);
+  rigMesh(new THREE.SphereGeometry(1, 28, 16), mats.visor, 0, 0.35, 0.7, head, [0.72, 0.42, 0.32]);
+  rigMesh(new THREE.SphereGeometry(1, 12, 8), mats.eye, 0.3, 0.48, 0.97, head, [0.16, 0.07, 0.04]);
+  const leg = sx => { const p = pivot(sx * 0.52, -1.4, 0); rigMesh(new THREE.CylinderGeometry(0.42, 0.42, 1.1, 20), C, 0, -0.55, 0, p, [1, 1, 0.9]); return p; };
+  return emptyJoints(pivot, { head, legL: leg(-1), legR: leg(1) });
+}
+// dancing banana: a curved, tapered peel with brown tips, a smiley face and stick arms and legs
+function bananaRig(body, mats, pivot) {
+  const n = 22;
+  for (let i = 0; i <= n; i++) {
+    const t = i / n, a = (140 + 80 * t) * Math.PI / 180, r = 0.14 + 0.56 * Math.sin(Math.PI * t) ** 0.6;
+    rigMesh(new THREE.SphereGeometry(r, 18, 12), t < 0.06 || t > 0.94 ? mats.hat : mats.peel,
+      2.4 + Math.cos(a) * 2.9, 0.7 + Math.sin(a) * 2.9, 0, body, [1, 1, 0.9]);
+  }
+  const head = pivot(-0.4, 0.8, 0);
+  googlyEyes(mats, head, 0.2, 0.35, 0.5, 0.17);
+  const smile = rigMesh(new THREE.TorusGeometry(0.22, 0.04, 8, 16, Math.PI), mats.ink, 0, 0.02, 0.56, head);
+  smile.rotation.z = Math.PI;
+  const arm = sx => {
+    const p = pivot(sx * 0.62, 0.7, 0);
+    rigMesh(new THREE.CylinderGeometry(0.06, 0.06, 1.3, 8), mats.legs, 0, -0.65, 0, p);
+    rigMesh(new THREE.SphereGeometry(0.2, 12, 10), mats.eye, 0, -1.35, 0, p);
+    return p;
+  };
+  const leg = sx => {
+    const p = pivot(sx * 0.3, -1.0, 0);
+    rigMesh(new THREE.CylinderGeometry(0.07, 0.07, 1.25, 8), mats.legs, 0, -0.62, 0, p);
+    rigMesh(new THREE.BoxGeometry(0.35, 0.2, 0.55), mats.boot, 0, -1.38, 0.1, p);
+    return p;
+  };
+  return emptyJoints(pivot, { head, armL: arm(-1), armR: arm(1), legL: leg(-1), legR: leg(1) });
+}
+// big friendly swamp ogre: green, trumpet ears, cream shirt under a vest, belt and boots
+function ogreRig(body, mats, pivot) {
+  const G = mats.skin, box = (sx, sy, sz) => new THREE.BoxGeometry(sx, sy, sz);
+  rigMesh(box(2.4, 2.2, 1.4), mats.shirt, 0, 0.4, 0, body);
+  rigMesh(box(2.1, 1.0, 0.3), mats.shirt, 0, -0.15, 0.78, body);                    // belly
+  for (const sx of [-1, 1]) rigMesh(box(0.7, 2.05, 1.46), mats.torso, sx * 0.86, 0.45, 0, body);   // vest
+  rigMesh(box(2.46, 0.32, 1.5), mats.boot, 0, -0.62, 0, body);                      // belt
+  const head = pivot(0, 1.5, 0);
+  rigMesh(box(1.5, 1.4, 1.4), G, 0, 0.7, 0, head);
+  rigMesh(box(0.38, 0.32, 0.3), G, 0, 0.62, 0.8, head);                             // nose
+  rigMesh(box(0.7, 0.09, 0.05), mats.ink, 0, 0.3, 0.71, head);                     // smirk
+  for (const sx of [-1, 1]) {
+    rigMesh(box(0.26, 0.22, 0.05), mats.eye, sx * 0.34, 0.92, 0.71, head);
+    rigMesh(box(0.12, 0.14, 0.05), mats.ink, sx * 0.32, 0.9, 0.73, head);
+    rigMesh(box(0.34, 0.1, 0.06), mats.boot, sx * 0.34, 1.1, 0.72, head);            // brows
+    // ears: a stalk ending in a little trumpet
+    const ear = new THREE.Group(); ear.position.set(sx * 0.75, 0.95, 0); ear.rotation.z = -sx * 1.25; head.add(ear);
+    rigMesh(new THREE.CylinderGeometry(0.08, 0.1, 0.45, 8), G, 0, 0.22, 0, ear);
+    rigMesh(new THREE.CylinderGeometry(0.2, 0.07, 0.25, 12, 1, true), G, 0, 0.55, 0, ear);
+  }
+  const arm = sx => {
+    const p = pivot(sx * 1.6, 1.4, 0);
+    rigMesh(box(0.95, 0.9, 0.95), mats.shirt, 0, -0.45, 0, p);
+    rigMesh(box(0.85, 1.25, 0.85), G, 0, -1.45, 0, p);
+    return p;
+  };
+  const leg = sx => {
+    const p = pivot(sx * 0.6, -0.75, 0);
+    rigMesh(box(1.05, 1.35, 1.05), mats.legs, 0, -0.67, 0, p);
+    rigMesh(box(1.1, 0.42, 1.3), mats.boot, 0, -1.54, 0.1, p);
+    return p;
+  };
+  return emptyJoints(pivot, { head, armL: arm(-1), armR: arm(1), legL: leg(-1), legR: leg(1) });
 }
 // Minecraft creeper: big cube head, tall body, four stubby legs and no arms. Legs swing in
 // diagonal pairs (front-left with back-right) so it trots; the arm and cape joints stay empty
@@ -3057,7 +3183,7 @@ $('skin').onchange = e => {
   syncPickers(); saveSkin(e.target.value);
   // skins like the Creeper come with their own body
   if (sk.style && sk.style !== myStyle) setStyle(sk.style);
-  else if (!sk.style && myStyle === 'creeper') setStyle('roblox');
+  else if (!sk.style && COSTUMES[myStyle]) setStyle('roblox');
   mpHello();
   burst(pl.x, pl.y, pl.z, 30, 10, null, 0.8, 0.5, 10);
   e.target.blur();
