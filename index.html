@@ -1639,6 +1639,8 @@ const SKINS = {
   crewmate: { name: '🧑‍🚀 Crewmate', skin: 0xc51111, torso: 0xc51111, legs: 0x7a0838, cape: 0x7a0838, hat: 0x9fd8f0, glow: 0, trail: 'torso', style: 'crewmate' },
   banana: { name: '🍌 Banana', skin: 0xffe135, torso: 0xffe135, legs: 0x2a2a2a, cape: 0x2a2a2a, hat: 0x6b4a1e, glow: 0, trail: 'hat', style: 'banana' },
   ogre: { name: '👹 Swamp Ogre', skin: 0x8db33a, torso: 0x6b4a2a, legs: 0x5a3e22, cape: 0x3a2a1a, hat: 0x8db33a, glow: 0, trail: 'hat', style: 'ogre' },
+  toilet: { name: '🚽 Toilet Head', skin: 0xf2c8a0, torso: 0xf6f6f4, legs: 0xdcdcdc, cape: 0x7ab8ff, hat: 0x3a2a1a, glow: 0, trail: 'cape', style: 'toilet' },
+  duck: { name: '🦆 Rubber Duck', skin: 0xffd21a, torso: 0xffd21a, legs: 0xff8a00, cape: 0xff8a00, hat: 0xff8a00, glow: 0, trail: 'torso', style: 'duck' },
   enderman: { name: '🟣 Enderman', skin: 0x161616, torso: 0x161616, legs: 0x161616, cape: 0xcc00fa, hat: 0x161616, glow: 0, trail: 'cape', style: 'enderman' },
   creeper: { name: '💚 Creeper', skin: 0x5ac94f, torso: 0x3fa53a, legs: 0x2f8a2a, cape: 0x1a1a1a, hat: 0x5ac94f, glow: 0, trail: 'torso', style: 'creeper' },
   bigboned: { name: 'Big Boned', skin: 0xf6d2ae, torso: 0xd7262e, legs: 0x7b4a24, cape: 0xf3c70f, hat: 0x17b3ae, glow: 0, trail: 'cape' },
@@ -1710,6 +1712,7 @@ const makeMats = () => ({
   visor: new THREE.MeshPhongMaterial({ color: 0x9fd8f0, specular: 0xffffff, shininess: 120 }),
   shirt: phong({ color: 0xe2d6b4 }),
   ender: phong({ map: enderTex }),
+  water: new THREE.MeshPhongMaterial({ color: 0x5aa8e8, specular: 0xffffff, shininess: 100 }),
   enderEye: new THREE.MeshBasicMaterial({ color: 0xcc00fa }),
   enderEyeHi: new THREE.MeshBasicMaterial({ color: 0xf0a8ff }),
   boot: phong({ color: 0x2a2018 }),
@@ -1735,11 +1738,13 @@ function paintMats(mats, s) {
 // STYLES: how a character is built. Every style has the same joints (body, head, limbs,
 // two-piece cape) at the same height, so animation, emotes and multiplayer work unchanged.
 const STYLES = { roblox: '🧱 Roblox', southpark: '✂️ South Park', creeper: '💚 Creeper',
-  enderman: '🟣 Enderman', clippy: '📎 Paperclip', crewmate: '🧑‍🚀 Crewmate', banana: '🍌 Banana', ogre: '👹 Ogre' };
+  enderman: '🟣 Enderman', toilet: '🚽 Toilet Head', duck: '🦆 Rubber Duck', clippy: '📎 Paperclip', crewmate: '🧑‍🚀 Crewmate', banana: '🍌 Banana', ogre: '👹 Ogre' };
 // costume bodies: [rig builder, hat anchor position, hat scale]
 const COSTUMES = {
   creeper: [(b, m, p) => creeperRig(b, m, p), [0, 1.6, 0], 1.3],
   enderman: [(b, m, p) => endermanRig(b, m, p), [0, 1.2, 0], 1],
+  toilet: [(b, m, p) => toiletRig(b, m, p), [0, 1.15, 0], 0.9],
+  duck: [(b, m, p) => duckRig(b, m, p), [0, 1.45, 0.1], 1.1],
   clippy: [(b, m, p) => clippyRig(b, m, p), [0, 1.25, 0], 0.9],
   crewmate: [(b, m, p) => crewmateRig(b, m, p), [0, 1.5, 0], 1.3],
   banana: [(b, m, p) => bananaRig(b, m, p), [0.6, 1.8, 0], 0.8],
@@ -1903,6 +1908,50 @@ function ogreRig(body, mats, pivot) {
     return p;
   };
   return emptyJoints(pivot, { head, armL: arm(-1), armR: arm(1), legL: leg(-1), legR: leg(1) });
+}
+// a porcelain toilet (in the shirt colour) with a grinning head popping out of the bowl;
+// the hat colour is the hair. No arms or legs: it just glides along
+function toiletRig(body, mats, pivot) {
+  const P = mats.suit;
+  rigMesh(new THREE.CylinderGeometry(0.55, 0.75, 1.2, 28), P, 0, -1.9, 0.1, body, [1, 1, 1.15]);       // pedestal
+  rigMesh(new THREE.CylinderGeometry(1.0, 0.72, 1.0, 32), P, 0, -0.8, 0.15, body, [1, 1, 1.25]);       // bowl
+  rigMesh(new THREE.CylinderGeometry(0.85, 0.85, 0.05, 32), mats.water, 0, -0.38, 0.15, body, [1, 1, 1.25]);
+  const seat = rigMesh(new THREE.TorusGeometry(0.9, 0.12, 12, 32), P, 0, -0.28, 0.15, body, [1, 1.25, 1]);
+  seat.rotation.x = Math.PI / 2;
+  rigMesh(new THREE.BoxGeometry(1.8, 1.4, 0.7), P, 0, 0.45, -1.3, body);                              // tank
+  rigMesh(new THREE.BoxGeometry(1.95, 0.14, 0.82), P, 0, 1.2, -1.3, body);
+  rigMesh(new THREE.BoxGeometry(0.3, 0.08, 0.12), mats.metal, 0.65, 0.95, -0.92, body);              // flush handle
+  const lid = rigMesh(new THREE.CylinderGeometry(0.92, 0.92, 0.1, 32), P, 0, 0.55, -0.88, body, [1, 1, 1.2]);
+  lid.rotation.x = Math.PI / 2 - 0.15;
+  // the head, on the bobble pivot
+  const head = pivot(0, -0.3, 0.25);
+  rigMesh(new THREE.SphereGeometry(0.72, 28, 18), mats.skin, 0, 0.45, 0, head, [1, 1.1, 1]);
+  rigMesh(new THREE.SphereGeometry(0.74, 24, 12, 0, Math.PI * 2, 0, Math.PI * 0.42), mats.hat, 0, 0.5, -0.04, head, [1, 1.1, 1]);   // hair
+  googlyEyes(mats, head, 0.25, 0.58, 0.58, 0.14);
+  for (const sx of [-1, 1]) rigMesh(new THREE.BoxGeometry(0.28, 0.06, 0.06), mats.ink, sx * 0.25, 0.8, 0.62, head).rotation.z = -sx * 0.3;
+  const grin = rigMesh(new THREE.TorusGeometry(0.3, 0.05, 8, 18, Math.PI), mats.ink, 0, 0.32, 0.6, head);
+  grin.rotation.z = Math.PI;
+  return emptyJoints(pivot, { head });
+}
+// a giant yellow bath duck: round body, wings that flap with the arm animation, orange beak
+function duckRig(body, mats, pivot) {
+  const Y = mats.suit;
+  rigMesh(new THREE.SphereGeometry(1, 32, 20), Y, 0, -1.35, -0.1, body, [1.45, 1.15, 1.75]);
+  rigMesh(new THREE.SphereGeometry(1, 20, 14), Y, 0, -0.75, -1.65, body, [0.55, 0.5, 0.45]).rotation.x = -0.6;   // tail
+  const head = pivot(0, -0.35, 0.6);
+  rigMesh(new THREE.SphereGeometry(0.9, 28, 18), Y, 0, 0.6, 0, head);
+  const beak = rigMesh(new THREE.SphereGeometry(1, 20, 12), mats.hat, 0, 0.42, 0.85, head, [0.48, 0.16, 0.42]);
+  beak.rotation.x = 0.1;
+  for (const sx of [-1, 1]) {
+    rigMesh(new THREE.SphereGeometry(0.15, 16, 12), mats.ink, sx * 0.4, 0.82, 0.72, head);
+    rigMesh(new THREE.SphereGeometry(0.05, 8, 6), mats.eye, sx * 0.43, 0.88, 0.85, head);
+  }
+  const wing = sx => {
+    const p = pivot(sx * 1.25, -0.9, -0.1);
+    rigMesh(new THREE.SphereGeometry(1, 16, 12), Y, sx * 0.1, -0.45, 0, p, [0.25, 0.6, 0.85]);
+    return p;
+  };
+  return emptyJoints(pivot, { head, armL: wing(-1), armR: wing(1) });
 }
 // Enderman: very tall and thin, long dangling arms, glowing purple eyes. The hips sit high
 // (legs are long) but the feet still land on the same floor as every other body
@@ -2346,6 +2395,9 @@ const SFX = {
   firework: sfx(() => { noiseHit(0.5, 0.12, 2500, 0, 'highpass'); tone('sine', 220, 70, 0.3, 0.12); }),
 };
 
+const squeak = sfx(() => { tone('sine', 1100, 1900, 0.1, 0.09); tone('sine', 1900, 1300, 0.12, 0.07, 0.09); });
+const flush = sfx(() => { noiseHit(1.2, 0.35, 900, 0, 'bandpass'); noiseHit(0.8, 0.2, 400, 0.4); tone('sine', 300, 120, 0.9, 0.06, 0.2); });
+
 // ---------- World songs ----------
 // Every world has its own original loop, composed here in code (so it's copyright-free):
 // 4 bars of 16th-note steps; play(i, d) schedules step i, d seconds from now.
@@ -2614,6 +2666,7 @@ function explode() {
   if (soundOn && actx) {
     noiseHit(1.1, 0.9, 700);
     if (myStyle === 'creeper') noiseHit(0.5, 0.25, 6000, 0, 'highpass');   // sssss
+    if (myStyle === 'toilet') flush();
   }
   meme('boom');
   mpEvent({ t: 'boom' });
@@ -2880,6 +2933,7 @@ function stepPlayer(h) {
     pl.vy = jump; pl.grounded = false;
     burst(pl.x, pl.y - PH, pl.z, 6, 5, tmpColor.set(0xffffff), 0.4, 0.4, 0);
     SFX.jump(); fx.sq.v += 9;
+    if (myStyle === 'duck') squeak();
   } else if (!frozen && jumpQueued && !pl.grounded && pl.wallT > 0) {
     // wall jump: kick off the wall, up and away
     pl.vy = jump; pl.ex = pl.wallN.x * 15; pl.ez = pl.wallN.z * 15; pl.extDrag = 3; pl.wallT = 0; pl.airJumps = 1;
@@ -2888,6 +2942,7 @@ function stepPlayer(h) {
   } else if (jumpQueued && !pl.grounded && pl.airJumps > 0) {
     pl.vy = jump * 0.95; pl.airJumps--;
     trick(); fx.sq.v += 10; fx.fovKick = 1; SFX.double();
+    if (myStyle === 'duck') squeak();
     if (Math.random() < 0.35) meme('air');
     for (let i = 0; i < 18; i++) {
       const a = i / 18 * Math.PI * 2;
