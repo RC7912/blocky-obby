@@ -1823,14 +1823,15 @@ function clippyRig(body, mats, pivot) {
 // bean-shaped space crewmate: suit in the shirt colour, glossy visor, backpack, stubby legs
 function crewmateRig(body, mats, pivot) {
   const C = mats.suit;
-  rigMesh(new THREE.CylinderGeometry(1.1, 1.1, 2.2, 32), C, 0, 0.4, 0, body, [1, 1, 0.85]);
+  // the bean reaches well down between the legs so they stay attached when it stretches
+  rigMesh(new THREE.CylinderGeometry(1.1, 1.1, 2.9, 32), C, 0, 0.05, 0, body, [1, 1, 0.85]);
   rigMesh(new THREE.SphereGeometry(1.1, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2), C, 0, 1.5, 0, body, [1, 1, 0.85]);
-  rigMesh(new THREE.SphereGeometry(1.1, 32, 16, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), C, 0, -0.7, 0, body, [1, 0.5, 0.85]);
+  rigMesh(new THREE.SphereGeometry(1.1, 32, 16, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), C, 0, -1.4, 0, body, [1, 0.3, 0.85]);
   rigMesh(new THREE.BoxGeometry(1.3, 1.7, 0.7), C, 0, 0.5, -1.05, body);
   const head = pivot(0, 1.1, 0);
   rigMesh(new THREE.SphereGeometry(1, 28, 16), mats.visor, 0, 0.35, 0.7, head, [0.72, 0.42, 0.32]);
   rigMesh(new THREE.SphereGeometry(1, 12, 8), mats.eye, 0.3, 0.48, 0.97, head, [0.16, 0.07, 0.04]);
-  const leg = sx => { const p = pivot(sx * 0.52, -1.4, 0); rigMesh(new THREE.CylinderGeometry(0.42, 0.42, 1.1, 20), C, 0, -0.55, 0, p, [1, 1, 0.9]); return p; };
+  const leg = sx => { const p = pivot(sx * 0.52, -1.2, 0); rigMesh(new THREE.CylinderGeometry(0.42, 0.42, 1.3, 20), C, 0, -0.65, 0, p, [1, 1, 0.9]); return p; };
   return emptyJoints(pivot, { head, legL: leg(-1), legR: leg(1) });
 }
 // dancing banana: a curved, tapered peel with brown tips, a smiley face and stick arms and legs
