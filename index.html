@@ -1639,6 +1639,7 @@ const SKINS = {
   crewmate: { name: '🧑‍🚀 Crewmate', skin: 0xc51111, torso: 0xc51111, legs: 0x7a0838, cape: 0x7a0838, hat: 0x9fd8f0, glow: 0, trail: 'torso', style: 'crewmate' },
   banana: { name: '🍌 Banana', skin: 0xffe135, torso: 0xffe135, legs: 0x2a2a2a, cape: 0x2a2a2a, hat: 0x6b4a1e, glow: 0, trail: 'hat', style: 'banana' },
   ogre: { name: '👹 Swamp Ogre', skin: 0x8db33a, torso: 0x6b4a2a, legs: 0x5a3e22, cape: 0x3a2a1a, hat: 0x8db33a, glow: 0, trail: 'hat', style: 'ogre' },
+  enderman: { name: '🟣 Enderman', skin: 0x161616, torso: 0x161616, legs: 0x161616, cape: 0xcc00fa, hat: 0x161616, glow: 0, trail: 'cape', style: 'enderman' },
   creeper: { name: '💚 Creeper', skin: 0x5ac94f, torso: 0x3fa53a, legs: 0x2f8a2a, cape: 0x1a1a1a, hat: 0x5ac94f, glow: 0, trail: 'torso', style: 'creeper' },
   bigboned: { name: 'Big Boned', skin: 0xf6d2ae, torso: 0xd7262e, legs: 0x7b4a24, cape: 0xf3c70f, hat: 0x17b3ae, glow: 0, trail: 'cape' },
 };
@@ -1682,6 +1683,8 @@ const creeperFaceTex = pixelTex((g, s) => {
   g.fillRect(3, 4, 2, 2); g.fillRect(2, 5, 4, 2); g.fillRect(2, 7, 1, 1); g.fillRect(5, 7, 1, 1);   // mouth
   g.fillStyle = '#1e1e1e'; g.fillRect(3, 6, 2, 1);
 }, 8, false);
+// Enderman: near-black speckled skin
+const enderTex = pixelTex((g, s) => speckle(g, s, ['#141414', '#191919', '#101010', '#1e1e1e', '#161220']), 16, false);
 const makeMats = () => ({
   skin: phong(),
   face: phong({ map: faceTex }),
@@ -1706,6 +1709,9 @@ const makeMats = () => ({
   peel: new THREE.MeshPhongMaterial({ specular: 0x332a10, shininess: 20 }),
   visor: new THREE.MeshPhongMaterial({ color: 0x9fd8f0, specular: 0xffffff, shininess: 120 }),
   shirt: phong({ color: 0xe2d6b4 }),
+  ender: phong({ map: enderTex }),
+  enderEye: new THREE.MeshBasicMaterial({ color: 0xcc00fa }),
+  enderEyeHi: new THREE.MeshBasicMaterial({ color: 0xf0a8ff }),
   boot: phong({ color: 0x2a2018 }),
 });
 const mats = makeMats();
@@ -1729,10 +1735,11 @@ function paintMats(mats, s) {
 // STYLES: how a character is built. Every style has the same joints (body, head, limbs,
 // two-piece cape) at the same height, so animation, emotes and multiplayer work unchanged.
 const STYLES = { roblox: '🧱 Roblox', southpark: '✂️ South Park', creeper: '💚 Creeper',
-  clippy: '📎 Paperclip', crewmate: '🧑‍🚀 Crewmate', banana: '🍌 Banana', ogre: '👹 Ogre' };
+  enderman: '🟣 Enderman', clippy: '📎 Paperclip', crewmate: '🧑‍🚀 Crewmate', banana: '🍌 Banana', ogre: '👹 Ogre' };
 // costume bodies: [rig builder, hat anchor position, hat scale]
 const COSTUMES = {
   creeper: [(b, m, p) => creeperRig(b, m, p), [0, 1.6, 0], 1.3],
+  enderman: [(b, m, p) => endermanRig(b, m, p), [0, 1.2, 0], 1],
   clippy: [(b, m, p) => clippyRig(b, m, p), [0, 1.25, 0], 0.9],
   crewmate: [(b, m, p) => crewmateRig(b, m, p), [0, 1.5, 0], 1.3],
   banana: [(b, m, p) => bananaRig(b, m, p), [0.6, 1.8, 0], 0.8],
@@ -1896,6 +1903,20 @@ function ogreRig(body, mats, pivot) {
     return p;
   };
   return emptyJoints(pivot, { head, armL: arm(-1), armR: arm(1), legL: leg(-1), legR: leg(1) });
+}
+// Enderman: very tall and thin, long dangling arms, glowing purple eyes. The hips sit high
+// (legs are long) but the feet still land on the same floor as every other body
+function endermanRig(body, mats, pivot) {
+  const E = mats.ender, box = (sx, sy, sz) => new THREE.BoxGeometry(sx, sy, sz);
+  rigMesh(box(1.2, 1.8, 0.6), E, 0, 1.0, 0, body);
+  const head = pivot(0, 1.9, 0);
+  rigMesh(box(1.2, 1.2, 1.2), E, 0, 0.6, 0, head);
+  for (const sx of [-1, 1]) {
+    rigMesh(box(0.42, 0.13, 0.04), mats.enderEye, sx * 0.3, 0.5, 0.61, head);
+    rigMesh(box(0.16, 0.13, 0.05), mats.enderEyeHi, sx * 0.3, 0.5, 0.62, head);
+  }
+  const limb = (x, y, len) => { const p = pivot(x, y, 0); rigMesh(box(0.3, len, 0.3), E, 0, -len / 2, 0, p); return p; };
+  return emptyJoints(pivot, { head, armL: limb(-0.75, 1.85, 3.4), armR: limb(0.75, 1.85, 3.4), legL: limb(-0.3, 0.1, 2.6), legR: limb(0.3, 0.1, 2.6) });
 }
 // Minecraft creeper: big cube head, tall body, four stubby legs and no arms. Legs swing in
 // diagonal pairs (front-left with back-right) so it trots; the arm and cape joints stay empty
@@ -3850,6 +3871,12 @@ function frame(now) {
   }
   updatePeers(dt); updateLobby(dt);
   updatePet(myPet, pl.x, pl.y, pl.z, character.rotation.y, dt);
+  for (const c of [character, ...[...mp.peers.values()].map(p => p.char)])
+    if (c.visible && c.userData.style === 'enderman' && Math.random() < dt * 14) {
+      const r = () => (Math.random() - 0.5) * 2.2;
+      emit(c.position.x + r(), c.position.y + r() * 1.6, c.position.z + r(), tmpColor.setHSL(0.8 + Math.random() * 0.05, 1, 0.45 + Math.random() * 0.25),
+        r() * 0.4, -0.6 + Math.random() * 1.2, r() * 0.4, 1.2, 0.18, 0);
+    }
   updateRace(); updateGhost(dt); updateRockets(dt);
   // speed lines when you're flung, falling fast or boosted
   const lines = settings.speedLines ? Math.min(1, fx.fovKick * 0.8 + Math.max(0, -pl.vy - 30) / 40 + (pl.power?.type === 'speed' && moving ? 0.35 : 0)) : 0;
