@@ -40,11 +40,14 @@
   .modal > .panel { position: static; width: min(480px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow-y: auto; }
   .modal h2 { margin: 0 0 10px; font-family: "Press Start 2P", monospace; font-size: 16px; line-height: 1.5; color: #ffff55; }
   .modal p { margin: 4px 0 10px; color: #d0d0d0; }
-  #shopItems { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
+  #shopItems, #petItems, #badgeItems { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
   .item { background: rgba(255,255,255,.07); border: 2px solid #000; padding: 8px; text-align: center; }
   .item .ic { font-size: 34px; line-height: 1.1; }
   .item button { width: 100%; margin-top: 6px; font-size: 18px; }
   .item.on { outline: 2px solid #ffff55; }
+  .item.locked { opacity: .55; }
+  .item small { display: block; color: #a8a8a8; font-size: 15px; line-height: 1.1; margin-top: 2px; }
+  .modal h3 { margin: 14px 0 8px; font-family: "Press Start 2P", monospace; font-size: 12px; color: #55ffff; }
   .srv { display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,.07); border: 2px solid #000; padding: 6px 8px; margin-bottom: 6px; }
   .srv.here { outline: 2px solid #55ff55; }
   .srv div { flex: 1; min-width: 0; overflow-wrap: anywhere; line-height: 1.15; }
@@ -164,6 +167,7 @@
   <div class="row">
     <button id="dailyBtn">📅 Daily</button>
     <button id="shopBtn">🛒 Shop</button>
+    <button id="badgeBtn" title="Badges">🏅</button>
     <button id="setBtn" title="Settings">⚙️</button>
   </div>
   <div class="row">
@@ -206,7 +210,7 @@
   <p>Endless Minecraft-style obstacle courses. Dance, race your friends, grab coins, buy hats.</p>
   <div class="row"><button id="playBtn" class="primary">▶ Play</button></div>
   <div class="row"><button id="tSrv">🖥️ Servers</button><button id="tDaily">📅 Daily challenge</button></div>
-  <div class="row"><button id="tShop">🛒 Shop</button><button id="tSet">⚙️ Settings</button></div>
+  <div class="row"><button id="tShop">🛒 Shop</button><button id="tBadge">🏅 Badges</button><button id="tSet">⚙️ Settings</button></div>
   <p class="small">WASD + Space to play · works on phones too</p>
 </div></div>
 <div id="settingsM" class="modal"><div class="panel">
@@ -236,9 +240,18 @@
   <div class="row"><button id="srvCreate" class="primary">Create &amp; join</button><button class="close">Close</button></div>
 </div></div>
 <div id="shop" class="modal"><div class="panel">
-  <h2>🛒 Hat shop</h2>
+  <h2>🛒 Shop</h2>
   <p>💰 <b id="shopWallet">0</b> coins. Grab 🪙 on the course and finish to bank them (plus a finish bonus).</p>
+  <h3>🎩 Hats</h3>
   <div id="shopItems"></div>
+  <h3>🐾 Pets</h3>
+  <div id="petItems"></div>
+  <div class="row"><button class="close">Close</button></div>
+</div></div>
+<div id="badgesM" class="modal"><div class="panel">
+  <h2>🏅 Badges</h2>
+  <p id="badgeNote"></p>
+  <div id="badgeItems"></div>
   <div class="row"><button class="close">Close</button></div>
 </div></div>
 <button id="jumpBtn">JUMP</button>
@@ -1721,6 +1734,117 @@ let wallet = store.get('obbyWallet', 0), owned = store.get('obbyOwned', ['none']
 if (!Array.isArray(owned)) owned = ['none'];
 { const h = store.get('obbyHat', 'none'); setHat(character, owned.includes(h) ? h : 'none'); }
 
+// ---------- Pets ----------
+// Bought in the shop; your pet trots (or flies) along behind you, and other players see it.
+const PETS = {
+  none: { name: 'No pet', icon: '🚫', price: 0 },
+  dog: { name: 'Dog', icon: '🐶', price: 40 },
+  cat: { name: 'Cat', icon: '🐱', price: 40 },
+  duck: { name: 'Duck', icon: '🦆', price: 60 },
+  slime: { name: 'Slime', icon: '🟩', price: 70 },
+  creeper: { name: 'Creeper', icon: '💚', price: 90 },
+  bee: { name: 'Bee', icon: '🐝', price: 100, fly: true },
+  dragon: { name: 'Dragon', icon: '🐉', price: 250, fly: true },
+};
+// blocky pet built around its feet at (0, 0, 0), facing +z
+function makePet(id) {
+  const g = new THREE.Group(), wings = [];
+  const add = (sx, sy, sz, color, x, y, z, parent = g, extra = {}) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), new THREE.MeshLambertMaterial({ color, ...extra }));
+    m.position.set(x, y, z); m.castShadow = true; parent.add(m); return m;
+  };
+  const eyes = (y, z, gap = 0.16, color = 0x111111, size = 0.09) => { for (const sx of [-1, 1]) add(size, size, 0.04, color, sx * gap, y, z); };
+  const legs4 = (color, w, d, h = 0.4) => { for (const [x, z] of [[-w, -d], [w, -d], [-w, d], [w, d]]) add(0.2, h, 0.2, color, x, h / 2, z); };
+  const wing = (color, x, y, z, w, d, extra) => {
+    const p = new THREE.Group(); p.position.set(x, y, z); g.add(p);
+    add(w, 0.06, d, color, Math.sign(x) * w / 2, 0, 0, p, extra);
+    wings.push(p); return p;
+  };
+  if (id === 'dog') {
+    legs4(0x8a5a30, 0.25, 0.4);
+    add(0.7, 0.55, 1.2, 0xb07a45, 0, 0.65, 0);
+    add(0.6, 0.55, 0.55, 0xb07a45, 0, 1.05, 0.75);
+    add(0.32, 0.25, 0.3, 0xd8b088, 0, 0.92, 1.1);
+    add(0.12, 0.1, 0.06, 0x111111, 0, 1.0, 1.25);                       // nose
+    for (const sx of [-1, 1]) add(0.14, 0.3, 0.2, 0x6a4020, sx * 0.3, 1.2, 0.7);
+    eyes(1.15, 1.03);
+    add(0.12, 0.12, 0.5, 0xb07a45, 0, 0.95, -0.75).rotation.x = -0.7;     // tail
+  } else if (id === 'cat') {
+    legs4(0xe08a30, 0.2, 0.35, 0.35);
+    add(0.55, 0.45, 1.0, 0xf0a040, 0, 0.55, 0);
+    add(0.55, 0.5, 0.5, 0xf0a040, 0, 0.9, 0.62);
+    for (const sx of [-1, 1]) add(0.14, 0.2, 0.08, 0xe08a30, sx * 0.18, 1.22, 0.62);
+    add(0.2, 0.12, 0.06, 0xffc8d0, 0, 0.8, 0.88);
+    eyes(0.95, 0.88, 0.13, 0x3ac44a);
+    add(0.1, 0.8, 0.1, 0xe08a30, 0, 0.95, -0.55).rotation.x = -0.3;
+  } else if (id === 'duck') {
+    for (const sx of [-1, 1]) add(0.12, 0.3, 0.12, 0xf0a020, sx * 0.15, 0.15, 0);
+    add(0.6, 0.5, 0.8, 0xfafafa, 0, 0.55, 0);
+    add(0.4, 0.45, 0.4, 0xfafafa, 0, 1.0, 0.3);
+    add(0.3, 0.1, 0.3, 0xf0a020, 0, 0.95, 0.6);
+    eyes(1.1, 0.51, 0.12);
+    for (const sx of [-1, 1]) add(0.06, 0.35, 0.6, 0xe8e8e8, sx * 0.33, 0.6, -0.05);
+  } else if (id === 'slime') {
+    add(1.0, 1.0, 1.0, 0x6fd06a, 0, 0.5, 0, g, { transparent: true, opacity: 0.75 });
+    add(0.5, 0.5, 0.5, 0x3a9a3a, 0, 0.45, 0);
+    eyes(0.62, 0.51, 0.2, 0x113311, 0.16);
+    add(0.12, 0.08, 0.04, 0x113311, 0.05, 0.38, 0.51);
+  } else if (id === 'creeper') {
+    legs4(0x3a8a2a, 0.17, 0.17, 0.35);
+    add(0.55, 0.9, 0.35, 0x5cb83a, 0, 0.8, 0);
+    add(0.6, 0.6, 0.6, 0x5cb83a, 0, 1.55, 0);
+    for (const [sx, sy, w, h] of [[-0.14, 1.65, 0.14, 0.14], [0.14, 1.65, 0.14, 0.14], [0, 1.5, 0.12, 0.12], [-0.08, 1.4, 0.07, 0.16], [0.08, 1.4, 0.07, 0.16]])
+      add(w, h, 0.04, 0x0f2a0a, sx, sy, 0.31);
+  } else if (id === 'bee') {
+    add(0.7, 0.6, 0.85, 0xf6c21a, 0, 0, 0);
+    for (const z of [-0.12, 0.18]) add(0.72, 0.62, 0.1, 0x1a1a1a, 0, 0, z);
+    add(0.1, 0.1, 0.25, 0x1a1a1a, 0, 0, -0.5);                           // stinger
+    eyes(0.1, 0.43, 0.16);
+    for (const sx of [-1, 1]) wing(0xffffff, sx * 0.3, 0.32, 0, 0.6, 0.4, { transparent: true, opacity: 0.6 });
+  } else if (id === 'dragon') {
+    add(0.8, 0.7, 1.6, 0x2a1a4a, 0, 0, 0);
+    add(0.6, 0.55, 0.7, 0x2a1a4a, 0, 0.35, 1.0);
+    add(0.45, 0.3, 0.4, 0x3a2a5a, 0, 0.22, 1.45);
+    eyes(0.45, 1.36, 0.18, 0xd060ff, 0.12);
+    for (const sx of [-1, 1]) add(0.1, 0.35, 0.1, 0x7a6a9a, sx * 0.2, 0.75, 0.85).rotation.x = -0.5;   // horns
+    add(0.3, 0.25, 1.2, 0x2a1a4a, 0, 0.05, -1.3).rotation.x = 0.2;       // tail
+    for (const sx of [-1, 1]) wing(0x4a2a7a, sx * 0.4, 0.3, 0, 1.4, 0.9);
+  }
+  g.userData.wings = wings;
+  return g;
+}
+// one pet following one owner
+function setPet(ps, id) {
+  if (ps.group) { scene.remove(ps.group); ps.group.traverse(o => { o.geometry?.dispose(); o.material?.dispose(); }); ps.group = null; }
+  ps.id = Object.hasOwn(PETS, id) ? id : 'none';
+  if (ps.id === 'none') return;
+  ps.group = makePet(ps.id); ps.fly = !!PETS[ps.id].fly; ps.placed = false;
+  scene.add(ps.group);
+}
+function updatePet(ps, ox, oy, oz, yaw, dt, visible = true) {
+  const g = ps.group;
+  if (!g) return;
+  g.visible = visible;
+  ps.t = (ps.t || 0) + dt;
+  // trail a little behind and to the side of the owner
+  const tx = ox - Math.sin(yaw) * 2.8 + Math.cos(yaw) * 1.8, tz = oz - Math.cos(yaw) * 2.8 - Math.sin(yaw) * 1.8;
+  const ty = oy - PH + (ps.fly ? 2.8 + Math.sin(ps.t * 3) * 0.35 : 0);
+  if (!ps.placed || Math.hypot(tx - ps.x, ty - ps.y, tz - ps.z) > 30) { ps.x = tx; ps.y = ty; ps.z = tz; ps.placed = true; }
+  const dx = tx - ps.x, dz = tz - ps.z, dist = Math.hypot(dx, dz), k = 1 - Math.exp(-dt * 4);
+  ps.x += dx * k; ps.z += dz * k; ps.y += (ty - ps.y) * Math.min(1, k * 2);
+  // walkers hop as they go; fliers flap
+  const hop = !ps.fly && dist > 0.35 ? Math.abs(Math.sin(ps.t * 13)) * 0.45 : 0;
+  g.position.set(ps.x, ps.y + hop, ps.z);
+  const face = dist > 0.35 ? Math.atan2(dx, dz) : Math.atan2(ox - ps.x, oz - ps.z);
+  g.rotation.y += wrapA(face - g.rotation.y) * Math.min(1, dt * 8);
+  for (const [i, w] of g.userData.wings.entries()) w.rotation.z = (i ? -1 : 1) * Math.sin(ps.t * (ps.id === 'bee' ? 40 : 9)) * 0.6;
+}
+const myPet = {};
+let ownedPets = store.get('obbyOwnedPets', ['none']);
+if (!Array.isArray(ownedPets)) ownedPets = ['none'];
+{ const pid = store.get('obbyPet', 'none'); setPet(myPet, ownedPets.includes(pid) ? pid : 'none'); }
+
+
 // ---------- Particles ----------
 const particles = [], pGeo = new THREE.BoxGeometry(1, 1, 1);
 for (let i = 0; i < 400; i++) {
@@ -2139,6 +2263,7 @@ function explode() {
   if (soundOn && actx) noiseHit(1.1, 0.9, 700);
   meme('boom');
   mpEvent({ t: 'boom' });
+  stat('booms');
   die();
   fx.shake = 1.6;
 }
@@ -2147,6 +2272,7 @@ function playEmote(i) {
   if (!def || !pl.grounded) return;
   emote = { def, t: 0 };
   fx.idleT = 0; fx.sq.v += 6;
+  stat('emotes');
   def.sound?.();
   flashText(`${def.icon} ${def.name}`);
 }
@@ -2157,7 +2283,7 @@ const pl = { x: 0, y: 3, z: 0, vx: 0, vy: 0, vz: 0, facing: 0, ground: null, gro
 const CONVEYOR_TILE = 2;   // world units per conveyor texture repeat
 let runCoins = 0;
 let jumpQueued = false;
-let cpIndex = 0, deaths = 0, elapsed = 0, running = false, finished = false, walkPhase = 0;
+let cpIndex = 0, deaths = 0, elapsed = 0, running = false, finished = false, walkPhase = 0, skipped = false;
 
 function respawn() {
   const cp = checkpoints[cpIndex];
@@ -2181,7 +2307,7 @@ function die(cause) {
     flashText('🛡️ Shield saved you!'); SFX.boing(); fx.shake = 0.6;
     return;
   }
-  deaths++;
+  deaths++; stat('deaths');
   // break apart into skin-colored blocks
   for (const c of [currentSkin.torso, currentSkin.skin, currentSkin.legs, currentSkin.cape])
     burst(pl.x, pl.y, pl.z, 8, 14, tmpColor.set(c), 1.1, 0.7, 30);
@@ -2407,6 +2533,18 @@ function win() {
     race.done = true; race.results.push({ name: myName, time: elapsed }); place = race.results.length;
   }
   mpEvent({ t: 'win', time: elapsed, race: place ? race.id : undefined });
+  {
+    const [seed, stages, diff, world] = courseKey.split('|');
+    stats.wins++; stats.coins += runCoins;
+    if (diff === 'hard') stats.hardWins++;
+    if (!skipped && deaths === 0 && +stages >= 5) stats.flawless++;
+    if (!skipped && +stages >= 12 && elapsed < 90) stats.speedruns++;
+    if (seed.startsWith('daily-')) stats.dailyWins++;
+    if (place === 1 && race.results.length === 1 && mp.peers.size) stats.raceWins++;
+    if (isNight) stats.nightWins++;
+    if (!stats.worlds.includes(world)) stats.worlds.push(world);
+    store.set('obbyStats', stats); checkBadges();
+  }
   SFX.win(); trick(); fireworks(pl.x, pl.y, pl.z, 10);
   for (let i = 0; i < 3; i++) setTimeout(() => meme('win'), i * 250);
   // bank the coins grabbed on the way plus a finish bonus, and check the best time
@@ -2440,7 +2578,7 @@ function start() {
   mp.info = { seed, n: stages, d: diff, w: pick };
   mpJoin(courseKey);
   cpIndex = 0; deaths = 0; elapsed = 0; running = false; finished = false; simTime = 0; runCoins = 0; pl.power = null;
-  race = null;
+  race = null; skipped = false;
   $('win').style.display = 'none';
   $('total').textContent = stages;
   respawn(); ghostReset();
@@ -2473,14 +2611,97 @@ function renderShop() {
     if (!have) b.className = 'primary';
     b.disabled = on || (!have && wallet < h.price);
     b.onclick = () => {
-      if (!have) { wallet -= h.price; owned.push(id); store.set('obbyWallet', wallet); store.set('obbyOwned', owned); SFX.coin(); }
+      if (!have) { wallet -= h.price; owned.push(id); store.set('obbyWallet', wallet); store.set('obbyOwned', owned); SFX.coin(); checkBadges(); }
       setHat(character, id); store.set('obbyHat', id); mpHello();
       burst(pl.x, pl.y + 2, pl.z, 20, 8, null, 0.7, 0.4, 8);
       renderShop();
     };
     d.appendChild(b); box.appendChild(d);
   }
+  renderPets();
 }
+function renderPets() {
+  const box = $('petItems'); box.innerHTML = '';
+  for (const [id, pt] of Object.entries(PETS)) {
+    const have = ownedPets.includes(id), on = myPet.id === id;
+    const d = document.createElement('div'); d.className = 'item' + (on ? ' on' : '');
+    d.innerHTML = `<div class="ic">${pt.icon}</div>${esc(pt.name)}<br><span style="color:#ffff55">${pt.price ? '🪙 ' + pt.price : 'free'}</span>`;
+    const b = document.createElement('button');
+    b.textContent = on ? (id === 'none' ? 'Selected' : 'With you') : have ? 'Take out' : 'Adopt';
+    if (!have) b.className = 'primary';
+    b.disabled = on || (!have && wallet < pt.price);
+    b.onclick = () => {
+      if (!have) { wallet -= pt.price; ownedPets.push(id); store.set('obbyWallet', wallet); store.set('obbyOwnedPets', ownedPets); SFX.coin(); stat('pets'); }
+      setPet(myPet, id); store.set('obbyPet', id); mpHello();
+      if (id !== 'none') { burst(pl.x, pl.y, pl.z, 20, 8, null, 0.7, 0.4, 8); SFX.pop(); }
+      renderShop();
+    };
+    d.appendChild(b); box.appendChild(d);
+  }
+}
+// ---------- Badges ----------
+// Earned from what you do across all your games; pick one to show next to your name online.
+const stats = Object.assign({ wins: 0, hardWins: 0, flawless: 0, speedruns: 0, dailyWins: 0, raceWins: 0, nightWins: 0,
+  coins: 0, deaths: 0, booms: 0, emotes: 0, chats: 0, naps: 0, pets: 0, worlds: [] }, store.get('obbyStats', {}));
+if (!Array.isArray(stats.worlds)) stats.worlds = [];
+const BADGES = {
+  first: { icon: '🏁', name: 'First Finish', desc: 'Finish any obby', goal: () => [stats.wins, 1] },
+  hard: { icon: '🔥', name: 'Hardcore', desc: 'Finish an obby on Hard', goal: () => [stats.hardWins, 1] },
+  flawless: { icon: '😇', name: 'Untouchable', desc: 'Finish 5+ stages without dying or skipping', goal: () => [stats.flawless, 1] },
+  speed: { icon: '⚡', name: 'Speedrunner', desc: 'Finish 12+ stages in under 90s without skipping', goal: () => [stats.speedruns, 1] },
+  daily: { icon: '📅', name: 'Daily Grinder', desc: 'Finish 3 daily challenges', goal: () => [stats.dailyWins, 3] },
+  traveler: { icon: '🌍', name: 'World Traveler', desc: 'Finish an obby in every world', goal: () => [stats.worlds.length, Object.keys(THEMES).length] },
+  champ: { icon: '🥇', name: 'Champion', desc: 'Come 1st in a race against other players', goal: () => [stats.raceWins, 1] },
+  night: { icon: '🦉', name: 'Night Owl', desc: 'Finish an obby at night', goal: () => [stats.nightWins, 1] },
+  rich: { icon: '💰', name: 'Rich', desc: 'Grab 500 coins', goal: () => [stats.coins, 500] },
+  dier: { icon: '💀', name: 'Professional Dier', desc: 'Die 100 times', goal: () => [stats.deaths, 100] },
+  kaboom: { icon: '💥', name: 'Kaboom', desc: 'Explode 50 times', goal: () => [stats.booms, 50] },
+  dancer: { icon: '🕺', name: 'Dancer', desc: 'Do 100 emotes', goal: () => [stats.emotes, 100] },
+  chatty: { icon: '💬', name: 'Chatterbox', desc: 'Send 20 chat messages', goal: () => [stats.chats, 20] },
+  sleepy: { icon: '💤', name: 'Sleepyhead', desc: 'Fall asleep while AFK', goal: () => [stats.naps, 1] },
+  petlover: { icon: '🐾', name: 'Pet Lover', desc: 'Adopt a pet', goal: () => [stats.pets, 1] },
+  collector: { icon: '👑', name: 'Collector', desc: 'Own every hat', goal: () => [owned.length - 1, Object.keys(HATS).length - 1] },
+};
+let myBadges = store.get('obbyBadges', []), shownBadge = store.get('obbyBadge', '');
+if (!Array.isArray(myBadges)) myBadges = [];
+if (!myBadges.includes(shownBadge)) shownBadge = '';
+const badgeIcon = id => Object.hasOwn(BADGES, id) ? BADGES[id].icon + ' ' : '';
+function checkBadges(quiet = false) {
+  for (const [id, b] of Object.entries(BADGES)) {
+    if (myBadges.includes(id)) continue;
+    const [have, need] = b.goal();
+    if (have < need) continue;
+    myBadges.push(id);
+    if (quiet) continue;
+    // the first badge you earn is shown automatically
+    if (!shownBadge) { shownBadge = id; store.set('obbyBadge', id); mpHello(); }
+    sysLine(`🏅 Badge unlocked: ${b.icon} ${b.name}!`);
+    flashText(`🏅 ${b.icon} ${b.name}!`); SFX.ding(); fireworks(pl.x, pl.y + 2, pl.z, 4);
+  }
+  store.set('obbyBadges', myBadges);
+}
+function stat(key, n = 1) { stats[key] += n; store.set('obbyStats', stats); checkBadges(); }
+function renderBadges() {
+  $('badgeNote').textContent = `${myBadges.length} of ${Object.keys(BADGES).length} unlocked. Pick one to show next to your name for other players.`;
+  const box = $('badgeItems'); box.innerHTML = '';
+  for (const [id, b] of Object.entries(BADGES)) {
+    const have = myBadges.includes(id), on = shownBadge === id, [n, need] = b.goal();
+    const d = document.createElement('div'); d.className = 'item' + (on ? ' on' : '') + (have ? '' : ' locked');
+    d.innerHTML = `<div class="ic">${have ? b.icon : '🔒'}</div>${esc(b.name)}<small>${esc(b.desc)}</small>` +
+      (have || need <= 1 ? '' : `<small>${Math.min(n, need)} / ${need}</small>`);
+    if (have) {
+      const btn = document.createElement('button');
+      btn.textContent = on ? 'Hide' : 'Show';
+      if (!on) btn.className = 'primary';
+      btn.onclick = () => { shownBadge = on ? '' : id; store.set('obbyBadge', shownBadge); mpHello(); renderBadges(); };
+      d.appendChild(btn);
+    }
+    box.appendChild(d);
+  }
+}
+$('badgeBtn').onclick = e => { renderBadges(); $('badgesM').classList.add('open'); document.exitPointerLock?.(); e.target.blur(); };
+$('tBadge').onclick = () => $('badgeBtn').click();
+checkBadges(true);
 $('shopBtn').onclick = e => { renderShop(); $('shop').classList.add('open'); document.exitPointerLock?.(); e.target.blur(); };
 // settings: sliders and checkboxes write straight into settings and are saved
 function applySettings() {
@@ -2509,7 +2730,7 @@ $('tDaily').onclick = () => { closeTitle(); $('dailyBtn').click(); };
 $('tShop').onclick = () => $('shopBtn').click();
 $('tSet').onclick = () => $('setBtn').click();
 $('randBtn').onclick = () => { $('seed').value = randomSeed(); start(); };
-$('skipBtn').onclick = () => { if (cpIndex < checkpoints.length - 2) { cpIndex++; respawn(); } };
+$('skipBtn').onclick = () => { if (cpIndex < checkpoints.length - 2) { cpIndex++; skipped = true; respawn(); } };
 $('linkBtn').onclick = () => { navigator.clipboard?.writeText(location.href); flashText('Link copied! Send it to friends'); };
 $('againBtn').onclick = start;
 $('nextBtn').onclick = () => { $('seed').value = randomSeed(); start(); };
@@ -2631,7 +2852,7 @@ function cleanSkin(s) {
   for (const k of PARTS) out[k] = Number.isInteger(s?.[k]) ? s[k] & 0xffffff : 0x888888;
   return out;
 }
-const hello = () => ({ name: myName, skin: cleanSkin(currentSkin), style: myStyle, hat: character.userData.hatId });
+const hello = () => ({ name: myName, skin: cleanSkin(currentSkin), style: myStyle, hat: character.userData.hatId, pet: myPet.id, badge: shownBadge });
 
 // pixel-font label with a dark Minecraft-style nameplate
 function labelSprite(text, color, bg, h = 1) {
@@ -2687,7 +2908,8 @@ $('chatIn').addEventListener('keydown', e => {
   if (e.key !== 'Enter') return;
   const text = e.target.value.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 80);
   if (text) {
-    chatLine(`<b>${esc(myName)}:</b> ${esc(text)}`);
+    chatLine(`<b>${badgeIcon(shownBadge)}${esc(myName)}:</b> ${esc(text)}`);
+    stat('chats');
     setBubble(character, text);
     mpEvent({ t: 'chat', text });
     SFX.pop();
@@ -2732,11 +2954,13 @@ async function mpJoin(course) {
       p = addPeer(peerId);
       mp.hi.send(hello(), { target: peerId });
     }
-    const name = cleanName(d?.name) || 'Noob';
-    if (name !== p.name) {
+    const name = cleanName(d?.name) || 'Noob', badge = Object.hasOwn(BADGES, d?.badge) ? d.badge : '';
+    if (name !== p.name || badge !== p.badge) {
       if (!p.name) { sysLine(`${name} joined`); SFX.pop(); }
-      p.name = name; setTag(p.char, name);
+      p.name = name; p.badge = badge; setTag(p.char, badgeIcon(badge) + name);
     }
+    const pet = Object.hasOwn(PETS, d?.pet) ? d.pet : 'none';
+    if (pet !== p.pet.id) setPet(p.pet, pet);
     p.skin = cleanSkin(d?.skin); paintMats(p.mats, p.skin);
     const style = cleanStyle(d?.style);
     if (style !== p.char.userData.style) buildBody(p.char, p.mats, style);
@@ -2774,7 +2998,7 @@ async function mpJoin(course) {
     } else if (d.t === 'chat' && typeof d.text === 'string') {
       const text = d.text.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 80);
       if (!text) return;
-      chatLine(`<b>${esc(p.name)}:</b> ${esc(text)}`);
+      chatLine(`<b>${badgeIcon(p.badge)}${esc(p.name)}:</b> ${esc(text)}`);
       setBubble(p.char, text);
       SFX.pop();
     }
@@ -2889,7 +3113,7 @@ function addPeer(id) {
   const m = makeMats(), char = makeCharacter(m);
   char.visible = false;
   scene.add(char);
-  const p = { id, name: '', mats: m, char, skin: cleanSkin(null), cur: null, target: null, last: performance.now(), trailT: 0 };
+  const p = { id, name: '', badge: '', pet: {}, mats: m, char, skin: cleanSkin(null), cur: null, target: null, last: performance.now(), trailT: 0 };
   mp.peers.set(id, p);
   return p;
 }
@@ -2897,6 +3121,7 @@ function removePeer(id) {
   const p = mp.peers.get(id);
   if (!p) return;
   mp.peers.delete(id);
+  setPet(p.pet, 'none');
   scene.remove(p.char);
   p.char.traverse(o => { o.geometry?.dispose(); if (o.isSprite) { o.material.map.dispose(); o.material.dispose(); } });
   for (const m of [...Object.values(p.mats), ...Object.values(p.mats.flat)]) m.dispose?.();
@@ -2939,7 +3164,7 @@ function updatePeers(dt) {
   const k = 1 - Math.exp(-dt * 14), now = performance.now();
   for (const p of mp.peers.values()) {
     // a backgrounded tab stops sending; hide them until they move again
-    if (!p.target || now - p.last > 15000) { p.char.visible = false; continue; }
+    if (!p.target || now - p.last > 15000) { p.char.visible = false; if (p.pet.group) p.pet.group.visible = false; continue; }
     if (!p.cur) p.cur = p.target.slice();
     const c = p.cur, t = p.target;
     const px = c[0], pz = c[2];
@@ -2947,6 +3172,7 @@ function updatePeers(dt) {
       c[i] += (ANGLES.includes(i) ? wrapA(t[i] - c[i]) : t[i] - c[i]) * k;
     applyState(p.char, c);
     p.char.visible = true;
+    updatePet(p.pet, c[0], c[1], c[2], c[3], dt);
     if (p.char.userData.bubble && (p.char.userData.bubbleT -= dt) <= 0) swapLabel(p.char, 'bubble', null);
     // their trail
     p.trailT -= dt;
@@ -3084,7 +3310,7 @@ function frame(now) {
     if (emote.def.dur && emote.t > emote.def.dur) emote = null;
   } else if (pl.grounded && (now - lastInput) / 1000 > SLEEP_AFTER) {
     // AFK: flop onto your back and snore, chest rising and falling
-    if (!asleep) { asleep = true; snoreT = 1.5; fx.sq.v -= 8; flashText('💤 AFK'); }
+    if (!asleep) { asleep = true; snoreT = 1.5; fx.sq.v -= 8; flashText('💤 AFK'); stat('naps'); }
     const breath = Math.sin(t * 1.6);
     pose.pitch = -1.5; pose.hop = -1.75; sqTarget = 1 + breath * 0.05;
     pose.armLx = 0.1; pose.armRx = -0.2; pose.armLz = -0.5; pose.armRz = 0.35;
@@ -3198,6 +3424,7 @@ function frame(now) {
     emit(pl.x + r(), pl.y - (pl.grounded ? 2.2 : 0.5) + r(), pl.z + r(), trailColor(), r(), 1 + Math.random() * 2, r(), 0.6, 0.45);
   }
   updatePeers(dt); updateLobby(dt);
+  updatePet(myPet, pl.x, pl.y, pl.z, character.rotation.y, dt);
   updateRace(); updateGhost(dt); updateRockets(dt);
   // speed lines when you're flung, falling fast or boosted
   const lines = settings.speedLines ? Math.min(1, fx.fovKick * 0.8 + Math.max(0, -pl.vy - 30) / 40 + (pl.power?.type === 'speed' && moving ? 0.35 : 0)) : 0;
