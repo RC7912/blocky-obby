@@ -7,7 +7,15 @@ A Minecraft-style obby (obstacle course) generator that runs in your browser —
 ## Features
 
 - **Endless courses** — every seed makes a different obby. Pick the number of stages and the difficulty (Easy / Normal / Hard).
-- **Obstacles** — jumps, thin beams, moving platforms, spinners, slime bounce pads, zigzags, disappearing glass, lava floors, magma strips, conveyor belts, slippery ice and sweeping magma pillars.
+- **Obstacles** — jumps, thin beams, moving platforms, spinners, slime bounce pads, zigzags, disappearing glass, lava floors, magma strips, conveyor belts, slippery ice and sweeping magma pillars, plus:
+  - 🚀 **Launch pads** that fling you across a huge gap onto the next platform
+  - 🪨 **Falling gravel** that shakes and drops a moment after you land
+  - 🌬️ **Wind zones** where a fan blows you toward the edge in gusts
+  - 🪓 **Swinging pendulums** with axe blades sweeping across the path
+  - 🧱 **Wall jumps** — jump back and forth between two tall walls to climb to a ledge
+  - 🪜 **Ladders and vines** up tall pillars (just walk into them to climb)
+  - 🌀 **Portals** that teleport you across gaps far too wide to jump
+  - 🔓 **Levers** that make hidden glass stepping stones appear for a few seconds
 - **Five worlds** — Overworld, Nether, Frozen Peaks, The End and 🪟 Windows XP (Bliss sky and hills, explorer-window and taskbar platforms, Start-button checkpoints, and its own startup chime), each with its own blocks, sky and floating particles. Pick one or let the seed choose.
 - **Power-ups** — ⚡ speed boost, 🦘 super jump (with a triple jump) and 🛡️ a shield that saves you from one lava hit.
 - **Coins and a hat shop** — grab 🪙 along the course; they're banked when you finish, plus a finish bonus. Spend them on hats like a crown, top hat, halo or a spinning propeller cap.

@@ -194,7 +194,7 @@
   <div id="powerHud"></div>
   🌐 <span id="online">connecting…</span>
 </div>
-<div id="help" class="panel">WASD move · Space jump (again in air = double jump) · Click + mouse to look · Wheel zoom · R respawn · M music · 1-9 emotes · X explode · T chat · AFK = 💤 · 🪙 coins buy hats in the 🛒 shop</div>
+<div id="help" class="panel">WASD move · Space jump (again in air = double jump) · Click + mouse to look · Wheel zoom · R respawn · M music · 1-9 emotes · X explode · T chat · jump off walls to wall-jump · walk into ladders to climb · AFK = 💤 · 🪙 coins buy hats in the 🛒 shop</div>
 <div id="emotes" class="panel"></div>
 <div id="chat" class="panel"></div>
 <input id="chatIn" maxlength="80" placeholder="Say something… (Enter to send, Esc to cancel)">
@@ -573,6 +573,41 @@ const TEX = {
   }),
 };
 
+// textures for the newer obstacles
+Object.assign(TEX, {
+  gravel: pixelTex((g, s) => {
+    speckle(g, s, ['#7f7a74', '#6b6661', '#8f8a83', '#5e5a55', '#9a948c']);
+    for (let i = 0; i < 7; i++) { const x = Math.random() * s | 0, y = Math.random() * s | 0; px(g, x, y, '#4a4642'); px(g, (x + 1) % s, y, '#b0aaa2'); }
+  }),
+  // orange launch pad with a target ring
+  launcher: pixelTex((g, s) => {
+    speckle(g, s, ['#e8702a', '#f07a30', '#dc6824']);
+    for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) { const d = Math.hypot(x - 7.5, y - 7.5); if ((d > 5.5 && d < 7) || d < 2) px(g, x, y, '#fff2c8'); }
+    g.fillStyle = '#9a3a10'; g.fillRect(0, 0, s, 1); g.fillRect(0, s - 1, s, 1); g.fillRect(0, 0, 1, s); g.fillRect(s - 1, 0, 1, s);
+  }),
+  // see-through ladder and vines (alpha-tested)
+  ladder: pixelTex((g, s) => {
+    g.clearRect(0, 0, s, s);
+    g.fillStyle = '#7a5a30'; g.fillRect(2, 0, 2, s); g.fillRect(12, 0, 2, s);
+    for (let y = 1; y < s; y += 4) { g.fillStyle = '#a07a45'; g.fillRect(2, y, 12, 2); g.fillStyle = '#6a4a25'; g.fillRect(2, y + 1, 12, 1); }
+  }),
+  vines: pixelTex((g, s) => {
+    g.clearRect(0, 0, s, s);
+    for (const x0 of [2, 7, 12]) for (let y = 0; y < s; y++) {
+      const x = x0 + Math.round(Math.sin(y * 0.8 + x0) * 0.8);
+      px(g, x, y, '#2f6a1f');
+      if (Math.random() < 0.55) { px(g, x + 1, y, rand(['#3f8a2a', '#4f9c33', '#5aa83a'])); px(g, x - 1, y, rand(['#3f8a2a', '#4f9c33'])); }
+    }
+  }),
+  // swirling purple portal surface
+  portal: canvasTex(32, (g, s) => {
+    for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) {
+      const a = Math.atan2(y - 16, x - 16), d = Math.hypot(x - 16, y - 16), w = Math.sin(a * 3 + d * 0.5) * 0.5 + 0.5;
+      g.fillStyle = `rgba(${120 + w * 90 | 0},${30 + w * 40 | 0},${200 + w * 55 | 0},0.85)`; g.fillRect(x, y, 1, 1);
+    }
+  }),
+});
+
 // Phong (not Lambert) so the realistic textures can use bump maps and highlights;
 // with no specular it lights the same way the blocky look always did
 const lambert = opts => {
@@ -637,6 +672,8 @@ const AUTO_WORLDS = ['overworld', 'overworld', 'nether', 'frozen', 'end', 'xp'];
 const worldFor = (seed, w) => THEMES[w] ? w : AUTO_WORLDS[hashStr('world|' + seed) % AUTO_WORLDS.length];
 let theme = THEMES.overworld;
 
+BLOCKS.gravel = block(TEX.gravel);
+BLOCKS.launcher = block(TEX.launcher, TEX.slime, TEX.slime, { emissive: 0x2a0e00 });
 const MAT = {
   magma: lambert({ map: TEX.magma, emissive: 0xffffff, emissiveMap: TEX.magma, emissiveIntensity: 0.6 }),
   // dim diffuse + strong orange emissive keeps lava a saturated glowing orange instead of washing out to yellow
@@ -645,7 +682,14 @@ const MAT = {
   cloud: lambert({ color: 0xffffff, emissive: 0x9a9a9a, transparent: true, opacity: 0.85 }),
   power: lambert({ transparent: true, opacity: 0.9 }),
   coin: lambert({ color: 0xffd84a, emissive: 0xb08a00 }),
+  iron: lambert({ color: 0x6a6e74, specular: 0x444444, shininess: 40 }),
+  ladder: lambert({ map: TEX.ladder, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide }),
+  vines: lambert({ map: TEX.vines, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide }),
+  netherVines: lambert({ map: TEX.vines, color: 0xff5a4a, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide }),
+  portal: new THREE.MeshBasicMaterial({ map: TEX.portal, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false }),
+  hidden: lambert({ color: 0x7af0ff, emissive: 0x1a8aa0, transparent: true, opacity: 0.8 }),
 };
+MAT.portal.userData.shared = true;
 // ---------- Realistic textures ----------
 // The classic worlds can swap their pixel art for 256px photo-style textures with bump maps.
 // They're generated from tileable noise the first time they're switched on and drawn into
@@ -919,6 +963,14 @@ const REAL_RECIPES = {
       return [...mixc(mixc(rgb(0x956495), rgb(0xb98bb9), tone * 0.5 + k * 0.5), bevel > 0 ? rgb(0xe0c0e0) : rgb(0x5c3d5c), Math.abs(bevel) * 2), 0.6 + bevel + k * 0.2];
     });
   },
+  gravel: () => {
+    const w = worley(14), n = fbm(8, 3);
+    return realCanvas((u, v) => {
+      const { d1, d2, id } = w(u, v), e = d2 - d1, k = n(u, v);
+      if (e < 0.06) return [...mixc(rgb(0x3a3632), rgb(0x4a4540), k), 0.05];
+      return [...mixc(mixc(rgb(0x6a645c), rgb(0xa8a196), hash1(id)), rgb(0x55504a), (1 - sstep(0.06, 0.35, e)) * 0.4), 0.3 + sstep(0.06, 0.4, e) * 0.6];
+    });
+  },
   obsidian: () => {
     const n = fbm(3, 5), s2 = fbm(6, 4);
     return realCanvas((u, v) => {
@@ -954,7 +1006,7 @@ const REAL_LOOK = {
   stone: [0.06], cobble: [0.12], bricks: [0.1], planks: [0.06], glass: [0, 0x666666, 90], slime: [0.04, 0x334433, 40],
   gold: [0.06, 0x9a8040, 60], emerald: [0.06, 0x447755, 80], diamond: [0.06, 0x558888, 80], magma: [0.1], lava: [0.04],
   ice: [0.03, 0x667788, 90], conveyor: [0.05], netherrack: [0.08], blackstone: [0.07], netherBricks: [0.1],
-  endstone: [0.08], purpur: [0.1], obsidian: [0.04, 0x332244, 80],
+  endstone: [0.08], purpur: [0.1], obsidian: [0.04, 0x332244, 80], gravel: [0.1],
 };
 const realTex = new Map();   // pixel texture -> { image, bump, pixel state to restore }
 let realOn = false;
@@ -1240,7 +1292,7 @@ function addPart(o) {
   if (p.invisible) p.mesh.visible = false;
   course.add(p.mesh);
   if (p.move) { p.bx = p.x; p.by = p.y; p.bz = p.z; p.dx = p.dy = p.dz = 0; }
-  if (p.move || p.spin || p.vanish || p.power) dynamic.push(p);
+  if (p.move || p.spin || p.vanish || p.power || p.fall || p.swing || p.wind || p.lever || p.hiddenBy) dynamic.push(p);
   parts.push(p);
   minY = Math.min(minY, p.y);
   return p;
@@ -1250,7 +1302,7 @@ function addPart(o) {
 // become cylinders and power-ups glass orbs. Collision still uses the boxes.
 function partShape(p) {
   if (p.power) return 'orb';
-  if (p.kill && !p.lava && p.sy >= 0.6) return p.sx > p.sy * 3 ? 'barX' : p.sz > p.sy * 3 ? 'barZ' : 'pillar';
+  if (p.kill && !p.lava && !p.swing && p.sy >= 0.6) return p.sx > p.sy * 3 ? 'barX' : p.sz > p.sy * 3 ? 'barZ' : 'pillar';
   if (p.block === 'cobble' && p.sy >= 2 && p.sx < 2) return 'pillar';
   return null;
 }
@@ -1311,9 +1363,12 @@ function generate(seed, stages, diff, world) {
   const R = (a, b) => a + rng() * (b - a);
   const pick = arr => arr[Math.floor(rng() * arr.length)];
   const D = {
-    easy:   { g: [2, 3.6], dy: 1.0, mv: 2.5, spin: 1.3, belt: 4, obs: 2, types: ['jump', 'jump', 'beam', 'mover', 'spinner', 'bounce', 'zigzag', 'lava', 'strips', 'conveyor'] },
-    normal: { g: [3, 5.5], dy: 1.6, mv: 3.5, spin: 1.9, belt: 6, obs: 3, types: ['jump', 'beam', 'mover', 'spinner', 'bounce', 'zigzag', 'lava', 'strips', 'vanish', 'conveyor', 'ice', 'sweeper'] },
-    hard:   { g: [4.5, 7], dy: 1.8, mv: 4.5, spin: 2.6, belt: 8, obs: 4, types: ['jump', 'beam', 'mover', 'mover', 'spinner', 'bounce', 'zigzag', 'lava', 'strips', 'vanish', 'vanish', 'conveyor', 'ice', 'sweeper', 'sweeper'] },
+    easy:   { g: [2, 3.6], dy: 1.0, mv: 2.5, spin: 1.3, belt: 4, obs: 2, types: ['jump', 'jump', 'beam', 'mover', 'spinner', 'bounce', 'zigzag', 'lava', 'strips', 'conveyor',
+      'launcher', 'falling', 'ladder', 'portal', 'lever'] },
+    normal: { g: [3, 5.5], dy: 1.6, mv: 3.5, spin: 1.9, belt: 6, obs: 3, types: ['jump', 'beam', 'mover', 'spinner', 'bounce', 'zigzag', 'lava', 'strips', 'vanish', 'conveyor', 'ice', 'sweeper',
+      'launcher', 'falling', 'wind', 'pendulum', 'walljump', 'ladder', 'portal', 'lever'] },
+    hard:   { g: [4.5, 7], dy: 1.8, mv: 4.5, spin: 2.6, belt: 8, obs: 4, types: ['jump', 'beam', 'mover', 'mover', 'spinner', 'bounce', 'zigzag', 'lava', 'strips', 'vanish', 'vanish', 'conveyor', 'ice', 'sweeper', 'sweeper',
+      'launcher', 'falling', 'falling', 'wind', 'wind', 'pendulum', 'pendulum', 'walljump', 'walljump', 'ladder', 'portal', 'lever'] },
   }[diff];
   const biomeOffset = Math.floor(rng() * theme.biomes.length);
   const G = () => R(D.g[0], D.g[1]);
@@ -1336,7 +1391,7 @@ function generate(seed, stages, diff, world) {
     const p = addPart(Object.assign(step(gap, d, dy, lat), { sx: w, sy: 1, sz: d, yaw: ang, block: blk }, extra));
     p.hd = d / 2;
     // a coin floats over some of the platforms that stay put
-    if (!p.move && !p.vanish && !p.bounce && rng() < 0.4) addCoin(p.x, p.y + 2.3, p.z);
+    if (!p.move && !p.vanish && !p.bounce && !p.fall && !p.launch && !p.hiddenBy && rng() < 0.4) addCoin(p.x, p.y + 2.3, p.z);
     return (cur = p);
   }
   function addCoin(x, y, z) {
@@ -1422,6 +1477,111 @@ function generate(seed, stages, diff, world) {
         addPart(Object.assign(local(p, 0, 1.6, z), { sx: 1.2, sy: 2.2, sz: 1.2, yaw: ang, kill: true,
           move: { axis: 'x', amp: w / 2 - 0.8, speed: R(1.2, 1.8) * D.spin / 1.9, phase: R(0, 6.28) } }));
       }
+    },
+    // launch pad that flings you across a big gap onto the next platform
+    launcher() {
+      const pad = plat(G() * 0.7, 4, 4, R(-0.5, 0.5), 0, { block: 'launcher', launch: {} });
+      const to = plat(R(10, 14), 6, 6, R(0, 3));
+      // fixed upward speed; pick the sideways speed so the arc lands on the target's centre
+      const vy = 30, dy = to.y - pad.y, T = (vy + Math.sqrt(vy * vy - 2 * GRAV * dy)) / GRAV;
+      Object.assign(pad.launch, { vy, x: (to.x - pad.x) / T, z: (to.z - pad.z) / T });
+    },
+    // gravel blocks that shake and fall a moment after you land on them
+    falling() {
+      for (let i = 0; i < 5; i++) plat(G() * 0.6, 3, 3, R(-0.4, 0.6), R(-1.5, 1.5), { block: 'gravel', fall: true });
+      plat(G(), 5, 5, 0);
+    },
+    // a fan at the side of a long platform blowing you toward the edge
+    wind() {
+      const w = 7, d = R(16, 20), p = plat(G(), w, d, R(-0.5, 0.5));
+      const side = rng() < 0.5 ? 1 : -1, strength = { easy: 4.5, normal: 6.5, hard: 8.5 }[diff];
+      const c = Math.cos(ang), sn = Math.sin(ang);
+      const zone = addPart(Object.assign(local(p, 0, 4, 0), { sx: w + 3, sy: 8, sz: d - 2, yaw: ang, solid: false, invisible: true,
+        wind: { x: side * strength * c, z: -side * strength * sn } }));
+      // fan housing with spinning blades on the upwind side
+      const fan = addPart(Object.assign(local(p, -side * (w / 2 + 1), 2.5, 0), { sx: 1.2, sy: 4, sz: 4, yaw: ang, block: 'stone' }));
+      const blades = new THREE.Group();
+      for (let k = 0; k < 3; k++) {
+        const b = new THREE.Mesh(new THREE.BoxGeometry(0.15, 3.4, 0.6), MAT.iron);
+        b.rotation.x = k * Math.PI / 3; blades.add(b);
+      }
+      const hub = new THREE.Group();
+      hub.position.copy(fan.mesh.position); hub.rotation.y = ang;
+      blades.position.x = side * 0.75; hub.add(blades); course.add(hub);
+      zone.wind.blades = blades;
+      zone.wind.side = side;
+    },
+    // axes on arms swinging across a long platform
+    pendulum() {
+      const w = 6, d = R(16, 20), p = plat(G(), w, d, R(-0.5, 0.5));
+      const n = d > 18 ? 3 : 2, H = 8.5, len = 6.6;
+      for (let k = 0; k < n; k++) {
+        const z = -d / 2 + 3.5 + k * (d - 7) / (n - 1);
+        for (const sx of [-1, 1]) addPart(Object.assign(local(p, sx * (w / 2 + 0.6), 0.5 + H / 2, z), { sx: 0.8, sy: H, sz: 0.8, yaw: ang, block: 'cobble' }));
+        addPart(Object.assign(local(p, 0, 0.5 + H + 0.3, z), { sx: w + 2, sy: 0.6, sz: 0.8, yaw: ang, block: 'planks' }));
+        const piv = local(p, 0, 0.5 + H, z);
+        const arm = new THREE.Group(), rod = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, len, 8), MAT.iron);
+        rod.position.y = -len / 2; arm.add(rod); arm.position.set(piv.x, piv.y, piv.z); course.add(arm);
+        addPart({ x: piv.x, y: piv.y - len, z: piv.z, sx: 2.2, sy: 1.6, sz: 0.5, yaw: ang, kill: true,
+          swing: { px: piv.x, py: piv.y, pz: piv.z, len, yaw: ang, arm, amp: 1.05, speed: R(1.6, 2.2) * D.spin / 1.9, phase: k * 2.1 + R(0, 1) } });
+      }
+    },
+    // two tall walls: jump back and forth between them to climb up to a ledge
+    walljump() {
+      const base = plat(G(), 6, 10, R(-0.5, 0.5)), H = 14, gap = 4.6;
+      for (const sx of [-1, 1]) addPart(Object.assign(local(base, sx * (gap / 2 + 0.6), 0.5 + H / 2, 2), { sx: 1.2, sy: H, sz: 6, yaw: ang, block: 'bricks', wallJump: true }));
+      const tag = labelSprite('WALL JUMP', '#ffff55', 'rgba(0,0,0,.45)', 1.3), tp = local(base, 0, 4, -3);
+      tag.position.set(tp.x, tp.y, tp.z); course.add(tag);
+      cur = { x: base.x, y: base.y, z: base.z, hd: 5 };
+      const ledge = plat(0, 6, 6, 12.5);
+      ledge.hd = 3;
+    },
+    // a tall pillar with a ladder (or vines) up its near face
+    ladder() {
+      const base = plat(G(), 6, 6, R(-0.5, 0.5)), H = R(9, 12);
+      const top = local(base, 0, 0, base.hd + 2.5);
+      const pillar = addPart({ x: top.x, y: base.y - 0.5 + H / 2, z: top.z, sx: 5, sy: H, sz: 5, yaw: ang, block: blk });
+      const face = local(base, 0, 0, base.hd + 0.6);
+      addPart({ x: face.x, y: base.y + H / 2 + 0.8, z: face.z, sx: 2.4, sy: H + 1.6, sz: 1.6, yaw: ang, solid: false, invisible: true, climb: true });
+      const mat = theme === THEMES.overworld ? MAT.vines : theme === THEMES.nether ? MAT.netherVines : MAT.ladder;
+      const vis = new THREE.Mesh(boxGeo(2.2, H, 0.05), mat), at = local(base, 0, 0, base.hd - 0.03);
+      vis.position.set(at.x, base.y - 0.5 + H / 2, at.z); vis.rotation.y = ang; course.add(vis);
+      cur = { x: pillar.x, y: base.y - 1 + H, z: pillar.z, hd: 2.5 };
+    },
+    // walk into the portal to jump across a gap far too wide to cross
+    portal() {
+      const a = plat(G(), 6, 6, R(-0.5, 0.5));
+      const frame = (p, lz) => {
+        for (const sx of [-1, 1]) addPart(Object.assign(local(p, sx * 1.9, 3, lz), { sx: 0.8, sy: 5, sz: 0.8, yaw: ang, block: 'obsidian' }));
+        addPart(Object.assign(local(p, 0, 5.9, lz), { sx: 4.6, sy: 0.8, sz: 0.8, yaw: ang, block: 'obsidian' }));
+        const sheet = new THREE.Mesh(new THREE.PlaneGeometry(3, 4.6), MAT.portal), sp = local(p, 0, 3, lz);
+        sheet.position.set(sp.x, sp.y, sp.z); sheet.rotation.y = ang; course.add(sheet);
+      };
+      frame(a, 1.8);
+      const b = plat(R(27, 32), 6, 6, R(1, 4));
+      frame(b, -1.8);
+      const dest = local(b, 0, 3, 0.5);
+      addPart(Object.assign(local(a, 0, 3, 1.8), { sx: 3, sy: 4.6, sz: 0.8, yaw: ang, solid: false, invisible: true,
+        portal: { x: dest.x, y: dest.y, z: dest.z, ang } }));
+    },
+    // pull the lever to make a row of glass stepping stones appear for a few seconds
+    lever() {
+      const a = plat(G(), 6, 6, R(-0.5, 0.5));
+      const L = { t: 0, dur: { easy: 10, normal: 8, hard: 6.5 }[diff], parts: [] };
+      const lp = addPart(Object.assign(local(a, 0, 1.5, 0), { sx: 1.8, sy: 2, sz: 1.8, yaw: ang, solid: false, invisible: true, lever: L }));
+      const base = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.6, 1.3), BLOCKS.cobble), bp = local(a, 0, 0.8, 0);
+      base.position.set(bp.x, bp.y, bp.z); base.rotation.y = ang; course.add(base);
+      const handle = new THREE.Group(), stick = new THREE.Mesh(new THREE.BoxGeometry(0.26, 1.9, 0.26), BLOCKS.planks);
+      stick.position.y = 0.95; handle.add(stick); handle.position.copy(base.position); handle.rotation.order = 'YXZ';
+      handle.rotation.set(-0.7, ang, 0); course.add(handle);
+      lp.handle = handle;
+      const tag = labelSprite('PULL THE LEVER', '#ffff55', 'rgba(0,0,0,.45)', 1.1), tp = local(a, 0, 4.2, 0);
+      tag.position.set(tp.x, tp.y, tp.z); course.add(tag);
+      for (let i = 0; i < 4; i++) {
+        const h = plat(R(2.5, 3.5), 2.6, 2.6, R(-0.3, 0.5), R(-1.2, 1.2), { solid: false, invisible: true, hiddenBy: L });
+        h.mesh.material = MAT.hidden; L.parts.push(h);
+      }
+      plat(R(2.5, 3.5), 6, 6, 0);
     },
     strips() {
       const w = 6, d = R(16, 22);
@@ -2279,7 +2439,10 @@ function playEmote(i) {
 
 const PR = 0.9, PH = 2.5;               // player half-width, half-height
 const SPEED = 16, JUMP = 22, GRAV = 60, BOUNCE = 37;
-const pl = { x: 0, y: 3, z: 0, vx: 0, vy: 0, vz: 0, facing: 0, ground: null, grounded: false, airJumps: 1, power: null, invuln: 0 };
+const pl = { x: 0, y: 3, z: 0, vx: 0, vy: 0, vz: 0, facing: 0, ground: null, grounded: false, airJumps: 1, power: null, invuln: 0,
+  // ex/ez: outside push (launchers, wall jumps) that fades by extDrag; airCtl scales your own steering
+  ex: 0, ez: 0, extDrag: 0, airCtl: 1, wallT: 0, wallN: { x: 0, z: 0 }, climbing: false, portalT: 0 };
+let stepH = 1 / 120;   // current physics substep, for pushes applied during collision
 const CONVEYOR_TILE = 2;   // world units per conveyor texture repeat
 let runCoins = 0;
 let jumpQueued = false;
@@ -2287,7 +2450,8 @@ let cpIndex = 0, deaths = 0, elapsed = 0, running = false, finished = false, wal
 
 function respawn() {
   const cp = checkpoints[cpIndex];
-  Object.assign(pl, { x: cp.x, y: cp.y, z: cp.z, vx: 0, vy: 0, vz: 0, ground: null, grounded: false, facing: cp.ang });
+  Object.assign(pl, { x: cp.x, y: cp.y, z: cp.z, vx: 0, vy: 0, vz: 0, ground: null, grounded: false, facing: cp.ang,
+    ex: 0, ez: 0, extDrag: 0, airCtl: 1, wallT: 0, climbing: false });
   camYaw = cp.ang + Math.PI;
   emote = null;
   pl.invuln = 0;
@@ -2320,6 +2484,23 @@ function die(cause) {
   respawn();
 }
 
+function teleport(to) {
+  burst(pl.x, pl.y, pl.z, 30, 10, tmpColor.set(0xb44aff), 0.8, 0.5, 0);
+  Object.assign(pl, { x: to.x, y: to.y, z: to.z, vx: 0, vy: 0, vz: 0, ex: 0, ez: 0, facing: to.ang, portalT: 1 });
+  camYaw = to.ang + Math.PI;
+  burst(pl.x, pl.y, pl.z, 30, 10, tmpColor.set(0xb44aff), 0.8, 0.5, 0);
+  fx.fovKick = 1.6; fx.sq.v += 12; trick();
+  if (soundOn && actx) { tone('sine', 300, 1400, 0.5, 0.15); noiseHit(0.5, 0.15, 2500, 0, 'bandpass'); }
+  flashText('🌀 Whoosh!');
+}
+function pullLever(p) {
+  const L = p.lever;
+  if (L.t > 0) return;
+  L.t = L.dur; p.handle.rotation.x = 0.7;
+  if (soundOn && actx) { noiseHit(0.05, 0.3, 3000, 0, 'bandpass'); tone('square', 900, 700, 0.06, 0.05); }
+  flashText('🔓 Platforms appeared!');
+  for (const h of L.parts) burst(h.x, h.y, h.z, 10, 5, tmpColor.set(0x7af0ff), 0.5, 0.4, 0);
+}
 function collide(p) {
   const dy = pl.y - p.y;
   if (Math.abs(dy) > p.hy + PH) return false;
@@ -2337,6 +2518,15 @@ function collide(p) {
     if (!p.cool) { givePower(p.power); p.cool = 10; p.mesh.visible = false; }
     return false;
   }
+  // wind blows you along while you're inside it, in gusts
+  if (p.wind) {
+    const gust = 0.7 + 0.3 * Math.sin(simTime * 1.4 + p.x);
+    pl.x += p.wind.x * gust * stepH; pl.z += p.wind.z * gust * stepH;
+    return false;
+  }
+  if (p.climb) { pl.climbing = true; return false; }
+  if (p.portal) { if (pl.portalT <= 0) { teleport(p.portal); return true; } return false; }
+  if (p.lever) { pullLever(p); return false; }
   if (p.checkpoint !== undefined) {
     if (p.checkpoint > cpIndex) {
       cpIndex = p.checkpoint;
@@ -2356,6 +2546,11 @@ function collide(p) {
     if (ox < oz) lx += Math.sign(lx) * ox; else lz += Math.sign(lz) * oz;
     pl.x = p.x + lx * c + lz * s;
     pl.z = p.z - lx * s + lz * c;
+    // touching a wall-jump wall in the air: remember which way is "away from the wall"
+    if (p.wallJump && !pl.grounded) {
+      const nx = ox < oz ? Math.sign(lx) : 0, nz = ox < oz ? 0 : Math.sign(lz);
+      pl.wallN = { x: nx * c + nz * s, z: -nx * s + nz * c }; pl.wallT = 0.2;
+    }
   }
   return false;
 }
@@ -2431,6 +2626,32 @@ function updateDynamics(h) {
       p.mesh.position.y = p.y + Math.sin(simTime * 3) * 0.3;
       if (p.cool > 0 && (p.cool -= h) <= 0) { p.mesh.visible = true; burst(p.x, p.y, p.z, 12, 6, tmpColor.setHex(POWERS[p.power].color), 0.5, 0.4, 0); }
     }
+    // falling block: shakes, drops away, comes back
+    if (p.fall && p.fallT !== undefined) {
+      p.fallT += h;
+      if (p.fallT < 0.7) p.mesh.position.set(p.x + (Math.random() - 0.5) * 0.18, p.y, p.z + (Math.random() - 0.5) * 0.18);
+      else if (p.fallT < 4) {
+        if (p.solid) { p.solid = false; p.fallV = 0; if (soundOn && actx) noiseHit(0.3, 0.12, 900); }
+        p.fallV += 45 * h; p.mesh.position.y -= p.fallV * h;
+        p.mesh.visible = p.fallT < 2.5;
+      } else { p.fallT = undefined; p.solid = true; p.mesh.visible = true; p.mesh.position.set(p.x, p.y, p.z); }
+    }
+    // pendulum blade on an arm swinging across the path
+    if (p.swing) {
+      const S = p.swing, th = Math.sin(simTime * S.speed + S.phase) * S.amp, c = Math.cos(S.yaw), sn = Math.sin(S.yaw);
+      const lx = Math.sin(th) * S.len, ly = -Math.cos(th) * S.len;
+      p.x = S.px + lx * c; p.y = S.py + ly; p.z = S.pz - lx * sn;
+      p.mesh.position.set(p.x, p.y, p.z); p.mesh.rotation.set(0, S.yaw, th);
+      S.arm.rotation.set(0, S.yaw, th);
+    }
+    if (p.wind?.blades) p.wind.blades.rotation.x += h * 18;
+    if (p.lever && p.lever.t > 0 && (p.lever.t -= h) <= 0) p.handle.rotation.x = -0.7;
+    // hidden platforms show while their lever is on, flickering just before they vanish
+    if (p.hiddenBy) {
+      const t = p.hiddenBy.t;
+      p.solid = t > 0;
+      p.mesh.visible = t > 0 && !(t < 2 && Math.floor(t * 8) % 2);
+    }
     if (p.vanish && p.timer !== undefined) {
       p.timer += h;
       if (p.timer < 0.6) p.mesh.material.opacity = 1 - 0.85 * p.timer / 0.6;
@@ -2456,14 +2677,20 @@ function stepPlayer(h) {
     // ice: you keep sliding and only slowly steer
     const k = Math.min(1, h * 2.2);
     pl.vx += (mx * speed - pl.vx) * k; pl.vz += (mz * speed - pl.vz) * k;
-  } else { pl.vx = mx * speed; pl.vz = mz * speed; }
+  } else { pl.vx = mx * speed * pl.airCtl; pl.vz = mz * speed * pl.airCtl; }
   pl.invuln = Math.max(0, pl.invuln - h);
+  pl.portalT -= h; pl.wallT -= h; stepH = h;
   if (im > 0.1) { pl.facing = Math.atan2(mx, mz); if (!running && !finished) running = true; }
 
   if (!frozen && (keys.Space || touchJump) && pl.grounded) {
     pl.vy = jump; pl.grounded = false;
     burst(pl.x, pl.y - PH, pl.z, 6, 5, tmpColor.set(0xffffff), 0.4, 0.4, 0);
     SFX.jump(); fx.sq.v += 9;
+  } else if (!frozen && jumpQueued && !pl.grounded && pl.wallT > 0) {
+    // wall jump: kick off the wall, up and away
+    pl.vy = jump; pl.ex = pl.wallN.x * 15; pl.ez = pl.wallN.z * 15; pl.extDrag = 3; pl.wallT = 0; pl.airJumps = 1;
+    fx.sq.v += 10; fx.tilt.v += 6; SFX.jump();
+    burst(pl.x - pl.wallN.x, pl.y, pl.z - pl.wallN.z, 8, 5, tmpColor.set(0xdddddd), 0.4, 0.4, 0);
   } else if (jumpQueued && !pl.grounded && pl.airJumps > 0) {
     pl.vy = jump * 0.95; pl.airJumps--;
     trick(); fx.sq.v += 10; fx.fovKick = 1; SFX.double();
@@ -2474,7 +2701,12 @@ function stepPlayer(h) {
     }
   }
   jumpQueued = false;
-  pl.vy = Math.max(pl.vy - GRAV * h, -80);
+  if (pl.climbing) {
+    // on a ladder or vines: any input climbs, otherwise you slide down slowly
+    pl.vy = im > 0.1 || keys.Space || touchJump ? 9 : Math.max(pl.vy - GRAV * h, -2.5);
+    pl.airJumps = 1;
+  } else pl.vy = Math.max(pl.vy - GRAV * h, -80);
+  if (pl.wallT > 0 && pl.vy < -8) pl.vy = -8;   // slide down walls you're touching
   const wasGrounded = pl.grounded, preVy = pl.vy;
 
   const g = pl.ground;
@@ -2482,11 +2714,14 @@ function stepPlayer(h) {
   // conveyor pushes along its local +x
   if (g && g.conveyor) { pl.x += Math.cos(g.yaw) * g.conveyor * h; pl.z -= Math.sin(g.yaw) * g.conveyor * h; }
   pl.x += pl.vx * h; pl.y += pl.vy * h; pl.z += pl.vz * h;
+  pl.x += pl.ex * h; pl.z += pl.ez * h;
+  if (pl.extDrag) { const k = Math.exp(-pl.extDrag * h); pl.ex *= k; pl.ez *= k; }
 
-  pl.grounded = false; pl.ground = null;
+  pl.grounded = false; pl.ground = null; pl.climbing = false;
   for (const p of parts) if (collide(p)) return;
   const gr = pl.ground;
   if (gr) pl.airJumps = pw === 'jump' ? 2 : 1;
+  if (gr && !wasGrounded) { pl.ex = pl.ez = 0; pl.airCtl = 1; }
   if (gr && !wasGrounded && preVy < -5 && !gr.bounce) {
     // jelly squash scaled by impact
     const k = Math.min(1, -preVy / 50);
@@ -2504,6 +2739,14 @@ function stepPlayer(h) {
     burst(pl.x, pl.y - PH, pl.z, 24, 12, null, 0.8, 0.5, 10);
   }
   if (gr && gr.vanish && gr.timer === undefined) gr.timer = 0;
+  if (gr && gr.fall && gr.fallT === undefined) gr.fallT = 0;
+  if (gr && gr.launch) {
+    // launcher: fling you along a fixed arc onto the platform ahead, with only a little steering
+    const L = gr.launch;
+    pl.vy = L.vy; pl.ex = L.x; pl.ez = L.z; pl.extDrag = 0; pl.airCtl = 0.15; pl.grounded = false;
+    trick(); fx.sq.v += 16; fx.fovKick = 1.5; SFX.boing();
+    burst(pl.x, pl.y - PH, pl.z, 26, 12, tmpColor.set(0xff8a30), 0.8, 0.5, 10);
+  }
   for (const c of coins) {
     if (c.got || Math.abs(pl.y - c.y) > 2.6 || (pl.x - c.x) ** 2 + (pl.z - c.z) ** 2 > 2.2) continue;
     c.got = true; c.mesh.visible = false; runCoins++;
@@ -2569,7 +2812,7 @@ function start() {
   chimeWorld = world;
   setSong(world);
   // switching to a different course leaves a named server for that course's Main server
-  const key = `${seed}|${stages}|${diff}|${world}`;
+  const key = `${seed}|${stages}|${diff}|${world}|v2`;   // v2: courses with the newer obstacles
   if (key !== courseKey && !mp.pinServer) mp.server = MAIN_SERVER;
   mp.pinServer = false;
   history.replaceState(null, '', `#seed=${encodeURIComponent(seed)}&n=${stages}&d=${diff}${pick === 'auto' ? '' : '&w=' + pick}` +
@@ -2858,11 +3101,15 @@ const hello = () => ({ name: myName, skin: cleanSkin(currentSkin), style: myStyl
 function labelSprite(text, color, bg, h = 1) {
   const font = '16px "Press Start 2P", monospace';
   const c = document.createElement('canvas'), g = c.getContext('2d');
-  g.font = font;
-  c.width = Math.ceil(g.measureText(text).width) + 12; c.height = 26;
+  c.height = 26;
   const t = new THREE.CanvasTexture(c);
   t.magFilter = THREE.NearestFilter; t.minFilter = THREE.LinearFilter;
+  let s = null;
+  // sized to the text each time, since the pixel font may load (and widen it) after the first draw
   const draw = () => {
+    g.font = font;
+    c.width = Math.ceil(g.measureText(text).width) + 12; c.height = 26;
+    s?.scale.set(c.width / 26 * h, h, 1);
     g.clearRect(0, 0, c.width, c.height);
     g.fillStyle = bg; g.fillRect(0, 0, c.width, c.height);
     g.font = font; g.textAlign = 'center'; g.textBaseline = 'middle';
@@ -2870,9 +3117,9 @@ function labelSprite(text, color, bg, h = 1) {
     t.needsUpdate = true;
   };
   draw();
-  document.fonts?.load(font).then(draw, () => {});
-  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, depthWrite: false }));
+  s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, depthWrite: false }));
   s.scale.set(c.width / 26 * h, h, 1);
+  document.fonts?.load(font).then(draw, () => {});
   return s;
 }
 function swapLabel(char, slot, sprite, y) {
@@ -3272,7 +3519,7 @@ start();
 
 // ---------- Main loop ----------
 const camTarget = new THREE.Vector3(pl.x, pl.y, pl.z);
-let lavaNear = [], lavaScanT = 0;
+let lavaNear = [], windNear = [], lavaScanT = 0;
 let last = performance.now();
 function frame(now) {
   const dt = Math.max(0, Math.min((now - last) / 1000, 1 / 20));   // first frame's timestamp can predate `last`
@@ -3461,7 +3708,18 @@ function frame(now) {
   TEX.conveyor.offset.x -= dt * beltSpeed * TEX.conveyor.repeat.x / CONVEYOR_TILE;
   for (const c of coins) if (!c.got) c.mesh.rotation.y = t * 3 + c.x;
   // lava within 60 units gets sparks (checked a few times a second)
-  if ((lavaScanT -= dt) <= 0) { lavaScanT = 0.3; lavaNear = parts.filter(p => p.lava && Math.hypot(p.x - pl.x, p.z - pl.z) < 60 + p.sz / 2); }
+  if ((lavaScanT -= dt) <= 0) {
+    lavaScanT = 0.3;
+    lavaNear = parts.filter(p => p.lava && Math.hypot(p.x - pl.x, p.z - pl.z) < 60 + p.sz / 2);
+    windNear = parts.filter(p => p.wind && Math.hypot(p.x - pl.x, p.z - pl.z) < 60);
+  }
+  // wind streaks rushing across fan zones
+  for (const p of windNear) if (Math.random() < dt * 30) {
+    const c = Math.cos(p.yaw), s = Math.sin(p.yaw), lx = -p.wind.side * p.sx / 2, lz = (Math.random() - 0.5) * p.sz;
+    emit(p.x + lx * c + lz * s, p.y - p.hy + 1 + Math.random() * p.sy * 0.7, p.z - lx * s + lz * c, tmpColor.set(0xffffff),
+      p.wind.x * 2.2, 0, p.wind.z * 2.2, 0.9, 0.18, 0);
+  }
+  TEX.portal.offset.y += dt * 0.35; TEX.portal.offset.x = Math.sin(t * 0.7) * 0.1;
   // power-up countdown
   if (pl.power && (pl.power.t -= dt) <= 0) { flashText(`${POWERS[pl.power.type].icon} wore off`); pl.power = null; }
   // world ambience: embers rise, snow falls, End motes drift
