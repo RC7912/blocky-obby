@@ -1639,6 +1639,8 @@ const SKINS = {
   crewmate: { name: '🧑‍🚀 Crewmate', skin: 0xc51111, torso: 0xc51111, legs: 0x7a0838, cape: 0x7a0838, hat: 0x9fd8f0, glow: 0, trail: 'torso', style: 'crewmate' },
   banana: { name: '🍌 Banana', skin: 0xffe135, torso: 0xffe135, legs: 0x2a2a2a, cape: 0x2a2a2a, hat: 0x6b4a1e, glow: 0, trail: 'hat', style: 'banana' },
   ogre: { name: '👹 Swamp Ogre', skin: 0x8db33a, torso: 0x6b4a2a, legs: 0x5a3e22, cape: 0x3a2a1a, hat: 0x8db33a, glow: 0, trail: 'hat', style: 'ogre' },
+  microwave: { name: '📟 Microwave', skin: 0xf0f0f0, torso: 0xd8dadc, legs: 0x2a2a2a, cape: 0x2a2a2a, hat: 0xd8dadc, glow: 0, trail: 'fire', style: 'microwave' },
+  skeleton: { name: '💀 Skeleton', skin: 0xd8d8d0, torso: 0xd8d8d0, legs: 0xd8d8d0, cape: 0x6b4a2a, hat: 0xd8d8d0, glow: 0, trail: 'sparkle', style: 'skeleton' },
   toilet: { name: '🚽 Toilet Head', skin: 0xf2c8a0, torso: 0xf6f6f4, legs: 0xdcdcdc, cape: 0x7ab8ff, hat: 0x3a2a1a, glow: 0, trail: 'cape', style: 'toilet' },
   duck: { name: '🦆 Rubber Duck', skin: 0xffd21a, torso: 0xffd21a, legs: 0xff8a00, cape: 0xff8a00, hat: 0xff8a00, glow: 0, trail: 'torso', style: 'duck' },
   enderman: { name: '🟣 Enderman', skin: 0x161616, torso: 0x161616, legs: 0x161616, cape: 0xcc00fa, hat: 0x161616, glow: 0, trail: 'cape', style: 'enderman' },
@@ -1685,6 +1687,22 @@ const creeperFaceTex = pixelTex((g, s) => {
   g.fillRect(3, 4, 2, 2); g.fillRect(2, 5, 4, 2); g.fillRect(2, 7, 1, 1); g.fillRect(5, 7, 1, 1);   // mouth
   g.fillStyle = '#1e1e1e'; g.fillRect(3, 6, 2, 1);
 }, 8, false);
+// Skeleton: off-white bone and the skull face (drawn light so the skin colour tints them)
+const boneTex = pixelTex((g, s) => speckle(g, s, ['#ffffff', '#f0f0ea', '#e2e2dc', '#f6f6f2']), 16, false);
+const skullTex = pixelTex((g, s) => {
+  speckle(g, s, ['#ffffff', '#f0f0ea', '#e6e6e0']);
+  g.fillStyle = '#1a1a1a';
+  g.fillRect(1, 3, 2, 2); g.fillRect(5, 3, 2, 2);          // eye sockets
+  g.fillRect(3, 5, 2, 1);                                  // nose
+  g.fillRect(1, 6, 6, 1);                                  // mouth
+  g.fillStyle = '#cfcfc8'; g.fillRect(2, 6, 1, 1); g.fillRect(4, 6, 1, 1); g.fillRect(6, 6, 1, 1);   // teeth
+}, 8, false);
+// Microwave: the green clock on its panel
+const clockTex = canvasTex(64, (g, s) => {
+  g.fillStyle = '#0a1a0a'; g.fillRect(0, 0, s, s);
+  g.fillStyle = '#5dff6a'; g.font = 'bold 26px monospace'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText('12:00', s / 2, s / 2);
+}, false);
 // Enderman: near-black speckled skin
 const enderTex = pixelTex((g, s) => speckle(g, s, ['#141414', '#191919', '#101010', '#1e1e1e', '#161220']), 16, false);
 const makeMats = () => ({
@@ -1713,6 +1731,11 @@ const makeMats = () => ({
   shirt: phong({ color: 0xe2d6b4 }),
   ender: phong({ map: enderTex }),
   water: new THREE.MeshPhongMaterial({ color: 0x5aa8e8, specular: 0xffffff, shininess: 100 }),
+  bone: phong({ map: boneTex }),
+  skull: phong({ map: skullTex }),
+  glass: new THREE.MeshPhongMaterial({ color: 0x10181f, specular: 0xffffff, shininess: 110, transparent: true, opacity: 0.55 }),
+  mwLight: new THREE.MeshBasicMaterial({ color: 0x222222 }),
+  clock: new THREE.MeshBasicMaterial({ map: clockTex }),
   enderEye: new THREE.MeshBasicMaterial({ color: 0xcc00fa }),
   enderEyeHi: new THREE.MeshBasicMaterial({ color: 0xf0a8ff }),
   boot: phong({ color: 0x2a2018 }),
@@ -1732,18 +1755,21 @@ function paintMats(mats, s) {
   }
   mats.torsoFront.color.copy(mats.torso.color); mats.torsoFront.emissive.copy(mats.torso.emissive);
   mats.metal.color.set(s.skin); mats.peel.color.set(s.skin);
+  mats.bone.color.set(s.skin); mats.skull.color.set(s.skin);
   mats.suit.color.set(s.torso); mats.suit.emissive.set(s.torso).multiplyScalar(s.glow);
 }
 
 // STYLES: how a character is built. Every style has the same joints (body, head, limbs,
 // two-piece cape) at the same height, so animation, emotes and multiplayer work unchanged.
 const STYLES = { roblox: '🧱 Roblox', southpark: '✂️ South Park', creeper: '💚 Creeper',
-  enderman: '🟣 Enderman', toilet: '🚽 Toilet Head', duck: '🦆 Rubber Duck', clippy: '📎 Paperclip', crewmate: '🧑‍🚀 Crewmate', banana: '🍌 Banana', ogre: '👹 Ogre' };
+  enderman: '🟣 Enderman', skeleton: '💀 Skeleton', microwave: '📟 Microwave', toilet: '🚽 Toilet Head', duck: '🦆 Rubber Duck', clippy: '📎 Paperclip', crewmate: '🧑‍🚀 Crewmate', banana: '🍌 Banana', ogre: '👹 Ogre' };
 // costume bodies: [rig builder, hat anchor position, hat scale]
 const COSTUMES = {
   creeper: [(b, m, p) => creeperRig(b, m, p), [0, 1.6, 0], 1.3],
   enderman: [(b, m, p) => endermanRig(b, m, p), [0, 1.2, 0], 1],
   toilet: [(b, m, p) => toiletRig(b, m, p), [0, 1.15, 0], 0.9],
+  microwave: [(b, m, p) => microwaveRig(b, m, p), [0, 1.8, 0], 1.1],
+  skeleton: [(b, m, p) => skeletonRig(b, m, p), [0, 1.2, 0], 1],
   duck: [(b, m, p) => duckRig(b, m, p), [0, 1.45, 0.1], 1.1],
   clippy: [(b, m, p) => clippyRig(b, m, p), [0, 1.25, 0], 0.9],
   crewmate: [(b, m, p) => crewmateRig(b, m, p), [0, 1.5, 0], 1.3],
@@ -1908,6 +1934,55 @@ function ogreRig(body, mats, pivot) {
     return p;
   };
   return emptyJoints(pivot, { head, armL: arm(-1), armR: arm(1), legL: leg(-1), legR: leg(1) });
+}
+// a walking microwave: steel box, glass door that lights up while it "cooks", panel with a
+// glowing clock and buttons, stick arms and legs with white gloves and sneakers
+function microwaveRig(body, mats, pivot) {
+  const box = (sx, sy, sz) => new THREE.BoxGeometry(sx, sy, sz);
+  const head = pivot(0, -0.6, 0);
+  rigMesh(box(2.6, 1.8, 1.7), mats.suit, 0, 0.9, 0, head);
+  rigMesh(new THREE.PlaneGeometry(1.5, 1.15), mats.mwLight, -0.35, 0.9, 0.851, head);
+  rigMesh(box(1.62, 1.25, 0.04), mats.glass, -0.35, 0.9, 0.87, head);
+  rigMesh(box(0.08, 1.1, 0.1), mats.metal, 0.5, 0.9, 0.9, head);                  // door handle
+  rigMesh(box(0.72, 1.6, 0.04), mats.boot, 0.9, 0.9, 0.86, head);                 // control panel
+  rigMesh(new THREE.PlaneGeometry(0.56, 0.24), mats.clock, 0.9, 1.5, 0.885, head);
+  for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++)
+    rigMesh(box(0.14, 0.12, 0.04), mats.metal, 0.74 + c * 0.16, 1.15 - r * 0.2, 0.89, head);
+  rigMesh(box(0.5, 0.18, 0.05), mats.metal, 0.9, 0.38, 0.89, head);               // START button
+  const arm = sx => {
+    const p = pivot(sx * 1.35, 0.6, 0);
+    rigMesh(new THREE.CylinderGeometry(0.07, 0.07, 1.3, 8), mats.legs, 0, -0.65, 0, p);
+    rigMesh(new THREE.SphereGeometry(0.2, 12, 10), mats.eye, 0, -1.35, 0, p);
+    return p;
+  };
+  const leg = sx => {
+    const p = pivot(sx * 0.6, -0.6, 0);
+    rigMesh(new THREE.CylinderGeometry(0.08, 0.08, 1.7, 8), mats.legs, 0, -0.85, 0, p);
+    rigMesh(box(0.4, 0.22, 0.6), mats.boot, 0, -1.8, 0.1, p);
+    return p;
+  };
+  return emptyJoints(pivot, { head, armL: arm(-1), armR: arm(1), legL: leg(-1), legR: leg(1) });
+}
+// Minecraft-style skeleton: skull, spine and ribcage, thin bone limbs, a bow in one hand
+function skeletonRig(body, mats, pivot) {
+  const B = mats.bone, box = (sx, sy, sz) => new THREE.BoxGeometry(sx, sy, sz);
+  rigMesh(box(0.3, 2.0, 0.3), B, 0, 0.5, -0.1, body);                            // spine
+  rigMesh(box(2.0, 0.22, 0.45), B, 0, 1.42, 0, body);                            // shoulders
+  for (const y of [1.1, 0.75, 0.4]) {
+    rigMesh(box(1.4, 0.15, 0.12), B, 0, y, 0.38, body);
+    for (const sx of [-1, 1]) rigMesh(box(0.12, 0.15, 0.6), B, sx * 0.7, y, 0.1, body);
+  }
+  rigMesh(box(1.2, 0.35, 0.55), B, 0, -0.38, 0, body);                           // pelvis
+  const head = pivot(0, 1.5, 0);
+  rigMesh(box(1.2, 1.2, 1.2), [B, B, B, B, mats.skull, B], 0, 0.6, 0, head);
+  const limb = (x, y) => { const p = pivot(x, y, 0); rigMesh(box(0.3, 2.0, 0.3), B, 0, -1.0, 0, p); return p; };
+  const armL = limb(-1.1, 1.42), armR = limb(1.1, 1.42);
+  // bow: a curved stave and its string, held in the left hand
+  const bow = new THREE.Group(); bow.position.set(0, -1.9, 0.15); bow.rotation.y = Math.PI / 2; armL.add(bow);
+  const stave = rigMesh(new THREE.TorusGeometry(0.75, 0.05, 6, 20, Math.PI * 0.8), mats.cape, -0.45, 0, 0, bow);
+  stave.rotation.z = Math.PI / 2 + Math.PI * 0.1;
+  rigMesh(new THREE.CylinderGeometry(0.012, 0.012, 1.42, 4), mats.eye, -0.22, 0, 0, bow);
+  return emptyJoints(pivot, { head, armL, armR, legL: limb(-0.4, -0.5), legR: limb(0.4, -0.5) });
 }
 // a porcelain toilet (in the shirt colour) with a grinning head popping out of the bowl;
 // the hat colour is the hair. No arms or legs: it just glides along
@@ -2395,6 +2470,8 @@ const SFX = {
   firework: sfx(() => { noiseHit(0.5, 0.12, 2500, 0, 'highpass'); tone('sine', 220, 70, 0.3, 0.12); }),
 };
 
+const rattle = sfx(() => { for (let i = 0; i < 5; i++) noiseHit(0.03, 0.12, 2200 + Math.random() * 1500, i * 0.035, 'bandpass'); });
+const beeps = sfx(() => { for (let i = 0; i < 3; i++) tone('square', 1760, 1760, 0.12, 0.06, i * 0.2); });
 const squeak = sfx(() => { tone('sine', 1100, 1900, 0.1, 0.09); tone('sine', 1900, 1300, 0.12, 0.07, 0.09); });
 const flush = sfx(() => { noiseHit(1.2, 0.35, 900, 0, 'bandpass'); noiseHit(0.8, 0.2, 400, 0.4); tone('sine', 300, 120, 0.9, 0.06, 0.2); });
 
@@ -2558,6 +2635,22 @@ function updateChime() {
   if (!chimePending || !actx || actx.state !== 'running') return;
   chimePending = false;
   if (soundOn) xpChime();
+}
+
+// microwave skin: standing still it hums and lights up inside; walking away it beeps "done"
+let mwHum = null, mwCook = 0;
+function updateMicrowave(dt, still) {
+  const on = myStyle === 'microwave' && still;
+  mwCook = on ? mwCook + dt : (mwCook > 1 && myStyle === 'microwave' ? (beeps(), 0) : 0);
+  mats.mwLight.color.setHex(mwCook > 0.3 ? 0xffd27a : 0x222222);
+  if (!actx || !soundOn) return;
+  if (!mwHum) {
+    const o = actx.createOscillator(), o2 = actx.createOscillator(), g = actx.createGain();
+    o.type = 'sine'; o.frequency.value = 118; o2.type = 'triangle'; o2.frequency.value = 236;
+    g.gain.value = 0; o.connect(g); o2.connect(g); g.connect(master); o.start(); o2.start();
+    mwHum = g;
+  }
+  mwHum.gain.value += ((mwCook > 0.3 ? 0.06 : 0) - mwHum.gain.value) * Math.min(1, dt * 6);
 }
 
 // no music while you stand still: fade out when idle, back in when you move
@@ -2934,6 +3027,7 @@ function stepPlayer(h) {
     burst(pl.x, pl.y - PH, pl.z, 6, 5, tmpColor.set(0xffffff), 0.4, 0.4, 0);
     SFX.jump(); fx.sq.v += 9;
     if (myStyle === 'duck') squeak();
+    if (myStyle === 'skeleton') rattle();
   } else if (!frozen && jumpQueued && !pl.grounded && pl.wallT > 0) {
     // wall jump: kick off the wall, up and away
     pl.vy = jump; pl.ex = pl.wallN.x * 15; pl.ez = pl.wallN.z * 15; pl.extDrag = 3; pl.wallT = 0; pl.airJumps = 1;
@@ -3864,7 +3958,7 @@ function frame(now) {
   }
 
   if (asleep && (now - lastInput) / 1000 <= SLEEP_AFTER) { asleep = false; fx.sq.v += 10; fx.pop.v += 20; }
-  updateZzz(dt); updateChime();
+  updateZzz(dt); updateChime(); updateMicrowave(dt, pl.grounded && !moving);
   // the title screen keeps playing; in the game it goes quiet while you stand still
   updateMusicFade(dt, pl.grounded && !moving && !emote && !document.body.classList.contains('title-open'));
 
