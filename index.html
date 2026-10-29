@@ -213,6 +213,7 @@
     <div class="row">
       <button id="srvBtn">🖥️ Servers</button>
       <button id="raceBtn">🏁 Race</button>
+      <button id="lavaBtn" title="Floor is Lava: the course turns to lava behind you, reach the finish">🌋 Lava</button>
     </div>
     <div class="row">
       <button id="soundBtn">🔊 Sound</button>
@@ -628,8 +629,45 @@ const TEX = {
   }),
 };
 
-// textures for the newer obstacles
+// textures for the newer obstacles and the Candy Land / Arcade worlds
+const SPRINKLES = ['#ff3a5a', '#ffd43a', '#3ad1ff', '#7aff5a', '#b06aff', '#ffffff'];
+const neonTile = (line, fill = '#0a0a1a', faint = '#141432') => pixelTex((g, s) => {
+  g.fillStyle = fill; g.fillRect(0, 0, s, s);
+  g.fillStyle = faint; for (let i = 4; i < s; i += 4) { g.fillRect(i, 0, 1, s); g.fillRect(0, i, s, 1); }
+  g.fillStyle = line; g.fillRect(0, 0, s, 1); g.fillRect(0, 0, 1, s); g.fillRect(0, s - 1, s, 1); g.fillRect(s - 1, 0, 1, s);
+});
 Object.assign(TEX, {
+  // Candy Land: pink frosting with sprinkles, layered sponge cake, chocolate bar, candy cane, gummy
+  cakeTop: pixelTex((g, s) => {
+    speckle(g, s, ['#ff9ac8', '#ffa8d2', '#ff8cbf', '#ffb4da']);
+    for (let i = 0; i < 12; i++) { const x = Math.random() * (s - 1) | 0, y = Math.random() * s | 0, c = rand(SPRINKLES); px(g, x, y, c); px(g, x + 1, y, c); }
+  }),
+  cakeSide: pixelTex((g, s) => {
+    speckle(g, s, ['#f2d29a', '#eac68a', '#f6dca8']);
+    g.fillStyle = '#fff4e0'; g.fillRect(0, 9, s, 2);
+    g.fillStyle = '#d23a5a'; g.fillRect(0, 11, s, 1);
+    fringe(g, s, ['#ff9ac8', '#ffa8d2', '#ff8cbf'], 3);
+    for (const x of [2, 7, 12]) { px(g, x, 4, '#ff9ac8'); px(g, x, 5, '#ff9ac8'); }      // frosting drips
+  }),
+  chocolate: pixelTex((g, s) => {
+    speckle(g, s, ['#5a3420', '#5f3722', '#553020']);
+    g.fillStyle = '#3a2010'; g.fillRect(7, 0, 1, s); g.fillRect(15, 0, 1, s); g.fillRect(0, 7, s, 1); g.fillRect(0, 15, s, 1);
+    g.fillStyle = '#7a4a2e'; g.fillRect(0, 0, 7, 1); g.fillRect(8, 0, 7, 1); g.fillRect(0, 8, 7, 1); g.fillRect(8, 8, 7, 1);
+  }),
+  cane: pixelTex((g, s) => { for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) px(g, x, y, (x + y) % 8 < 4 ? rand(['#e8203a', '#dc1c34']) : rand(['#fff4f4', '#ffe8ea'])); }),
+  gummy: pixelTex((g, s) => {
+    speckle(g, s, ['#5aff8a', '#4af07a', '#6aff98']);
+    g.fillStyle = 'rgba(255,255,255,.6)'; g.fillRect(2, 2, 5, 1); g.fillRect(2, 2, 1, 4);
+  }),
+  // Arcade: dark tiles with glowing neon edges, and a maze tile with a pellet
+  neonCyan: neonTile('#00e5ff'),
+  neonPink: neonTile('#ff2bd6'),
+  neonGreen: neonTile('#39ff14', '#06140a', '#0f2a14'),
+  pac: pixelTex((g, s) => {
+    g.fillStyle = '#000014'; g.fillRect(0, 0, s, s);
+    g.fillStyle = '#2a3aff'; g.fillRect(0, 0, s, 2); g.fillRect(0, s - 2, s, 2);
+    g.fillStyle = '#ffe14a'; g.fillRect(7, 7, 2, 2);
+  }),
   gravel: pixelTex((g, s) => {
     speckle(g, s, ['#7f7a74', '#6b6661', '#8f8a83', '#5e5a55', '#9a948c']);
     for (let i = 0; i < 7; i++) { const x = Math.random() * s | 0, y = Math.random() * s | 0; px(g, x, y, '#4a4642'); px(g, (x + 1) % s, y, '#b0aaa2'); }
@@ -721,13 +759,29 @@ const THEMES = {
   // the Bliss wallpaper: deep blue sky, soft clouds, green hills below
   xp: { name: '🪟 Windows XP', biomes: ['bliss', 'xpWindow', 'bliss', 'xpTaskbar'], cp: 'xpStart', sky: [0x1f5fd6, 0xa9d1f7, 0x4f9a35],
     hemi: [0xffffff, 0x6aa84f, 0.6], sun: 0.7, sunDisc: true, clouds: true, ambient: 'xp', cycle: true },
+  // pastel sky, pink cotton-candy clouds, caramel instead of lava, giant lollipops all around
+  candy: { name: '🍭 Candy Land', biomes: ['cake', 'chocolate', 'cake', 'cane'], cp: 'gummy', sky: [0xff9ad5, 0xffe0f0, 0xc9a6ff],
+    hemi: [0xffffff, 0xffc0e0, 0.8], sun: 0.65, sunDisc: true, clouds: true, ambient: 'candy', cloud: 0xffc6e6, lava: [0x9a5a30, 0x6a2a08], decor: 'candy' },
+  // dark synthwave void, glowing neon blocks, hot-pink lava and a neon grid floor far below
+  arcade: { name: '👾 Arcade', biomes: ['neonCyan', 'neonPink', 'neonCyan', 'pac'], cp: 'neonGreen', sky: [0x08001f, 0x5a0a7a, 0x000000],
+    hemi: [0x9a7aff, 0x200040, 0.55], sun: 0.35, sunDisc: false, clouds: false, ambient: 'arcade', lava: [0xff40c0, 0xff00a0], decor: 'arcade' },
 };
 // "auto" picks a world from the seed, with the Overworld twice as likely
-const AUTO_WORLDS = ['overworld', 'overworld', 'nether', 'frozen', 'end', 'xp'];
+const AUTO_WORLDS = ['overworld', 'overworld', 'nether', 'frozen', 'end', 'xp', 'candy', 'arcade'];
 const worldFor = (seed, w) => THEMES[w] ? w : AUTO_WORLDS[hashStr('world|' + seed) % AUTO_WORLDS.length];
 let theme = THEMES.overworld;
 
 BLOCKS.gravel = block(TEX.gravel);
+BLOCKS.cake = block(TEX.cakeTop, TEX.cakeSide, TEX.cakeSide);
+BLOCKS.chocolate = block(TEX.chocolate);
+BLOCKS.cane = block(TEX.cane);
+BLOCKS.gummy = block(TEX.gummy, TEX.gummy, TEX.gummy, { transparent: true, opacity: 0.85, emissive: 0x0a3a14 });
+// neon blocks light themselves up so they glow in the dark Arcade
+const glowBlock = t => block(t, t, t, { emissive: 0xffffff, emissiveMap: t, emissiveIntensity: 0.9 });
+BLOCKS.neonCyan = glowBlock(TEX.neonCyan);
+BLOCKS.neonPink = glowBlock(TEX.neonPink);
+BLOCKS.neonGreen = glowBlock(TEX.neonGreen);
+BLOCKS.pac = glowBlock(TEX.pac);
 BLOCKS.launcher = block(TEX.launcher, TEX.slime, TEX.slime, { emissive: 0x2a0e00 });
 const MAT = {
   magma: lambert({ map: TEX.magma, emissive: 0xffffff, emissiveMap: TEX.magma, emissiveIntensity: 0.6 }),
@@ -1281,6 +1335,39 @@ function makeClouds(minX, maxX, minZ, maxZ, lowY, highY) {
   }
 }
 
+// world decorations, rebuilt with each course: giant lollipops and gumdrops around Candy Land,
+// a glowing grid floor far below the Arcade
+let gridTex = null, swirlTex = null;
+function makeDecor(kind, x0, x1, z0, z1, lowY) {
+  if (kind === 'arcade') {
+    gridTex ??= (() => {
+      const t = canvasTex(64, (g, s) => { g.fillStyle = '#05000f'; g.fillRect(0, 0, s, s); g.fillStyle = '#ff2bd6'; g.fillRect(0, 0, s, 3); g.fillRect(0, 0, 3, s); });
+      t.repeat.set(150, 150); t.anisotropy = MAX_ANISO; return t;
+    })();
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(3000, 3000), new THREE.MeshBasicMaterial({ map: gridTex }));
+    floor.rotation.x = -Math.PI / 2; floor.position.set((x0 + x1) / 2, lowY - 35, (z0 + z1) / 2);
+    course.add(floor);
+  } else if (kind === 'candy') {
+    swirlTex ??= canvasTex(64, (g, s) => {
+      g.fillStyle = '#fff'; g.fillRect(0, 0, s, s);
+      g.strokeStyle = '#ff3a8a'; g.lineWidth = 6; g.beginPath();
+      for (let a = 0; a < 22; a += 0.1) { const r = a * 1.4; g.lineTo(32 + Math.cos(a) * r, 32 + Math.sin(a) * r); }
+      g.stroke();
+    }, false);
+    const stickMat = new THREE.MeshLambertMaterial({ color: 0xfff8f0 }), popMat = new THREE.MeshLambertMaterial({ map: swirlTex });
+    for (let i = 0; i < 18; i++) {
+      const x = x0 - 60 + Math.random() * (x1 - x0 + 120), z = z0 - 60 + Math.random() * (z1 - z0 + 120);
+      const h = 25 + Math.random() * 25, y = lowY - 25 + Math.random() * 15, r = 5 + Math.random() * 5;
+      const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, h, 8), stickMat);
+      stick.position.set(x, y + h / 2, z); course.add(stick);
+      const pop = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 1.4, 32), [stickMat, popMat, popMat]);
+      pop.rotation.set(Math.PI / 2, 0, Math.random() * Math.PI); pop.position.set(x, y + h + r * 0.8, z); course.add(pop);
+      const gum = new THREE.Mesh(new THREE.ConeGeometry(3 + Math.random() * 2, 5, 16), new THREE.MeshLambertMaterial({ color: rand([0xff5a8a, 0x5ad1ff, 0x9aff5a, 0xffd43a]) }));
+      gum.position.set(x + 9, y + 2.5, z + 6); course.add(gum);
+    }
+  }
+}
+
 // recolour sky, fog and lights for a world
 function applyTheme(th) {
   const [top, horizon, bottom] = th.sky, U = sky.material.uniforms;
@@ -1291,9 +1378,12 @@ function applyTheme(th) {
   sun.intensity = th.sun;
   sunDisc.visible = th.sunDisc;
   clouds.visible = th.clouds;
-  MAT.cloud.color.setScalar(1); MAT.cloud.emissive.setHex(0x9a9a9a);
-  if (cloudSprite) cloudSprite.color.setScalar(1);
+  MAT.cloud.color.setHex(th.cloud ?? 0xffffff); MAT.cloud.emissive.setHex(0x9a9a9a);
+  if (cloudSprite) cloudSprite.color.setHex(th.cloud ?? 0xffffff);
   sun.color.setHex(0xffffff);
+  // lava takes on the world's flavour (caramel in Candy Land, neon pink in the Arcade)
+  const [lc, le] = th.lava || [0x8a4a2a, 0xff5200];
+  MAT.lava.color.setHex(lc); MAT.lava.emissive.setHex(le);
 }
 
 // small canvas + nearest filtering = chunky pixel text with a Minecraft-style drop shadow
@@ -1320,13 +1410,14 @@ function textSprite(text, color = '#fff') {
 // ---------- Course ----------
 const course = new THREE.Group();
 scene.add(course);
+let buildStage = 0;   // stage being built, stamped onto each part
 let parts = [], dynamic = [], checkpoints = [], coins = [], minY = 0, totalStages = 0, beltSpeed = 0;
 
 // per-part copy of shared materials, for parts that fade or light up on their own
 const own = m => { const c = m.clone(); c.userData.shared = false; return c; };
 
 function addPart(o) {
-  const p = Object.assign({ yaw: 0, solid: true, kill: false, block: 'grass' }, o);
+  const p = Object.assign({ yaw: 0, solid: true, kill: false, block: 'grass', stage: buildStage }, o);
   p.hx = p.sx / 2; p.hy = p.sy / 2; p.hz = p.sz / 2;
   p.br = Math.hypot(p.hx, p.hz) + (p.move ? p.move.amp : 0) + 2;
   p.ice = p.block === 'ice';
@@ -1412,6 +1503,7 @@ function clearCourse() {
 
 function generate(seed, stages, diff, world) {
   clearCourse();
+  buildStage = 0;
   theme = THEMES[world];
   applyTheme(theme);
   const rng = mulberry32(hashStr(`${seed}|${stages}|${diff}`));
@@ -1653,6 +1745,7 @@ function generate(seed, stages, diff, world) {
   };
 
   for (let s = 1; s <= stages; s++) {
+    buildStage = s;
     blk = theme.biomes[(s + biomeOffset) % theme.biomes.length];
     for (let i = 0; i < D.obs; i++) {
       if (rng() < 0.55) ang = Math.max(-1, Math.min(1, ang + R(-0.6, 0.6)));
@@ -1678,6 +1771,7 @@ function generate(seed, stages, diff, world) {
   let x0 = 0, x1 = 0, z0 = 0, z1 = 0, y1 = 0;
   for (const p of parts) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); z0 = Math.min(z0, p.z); z1 = Math.max(z1, p.z); y1 = Math.max(y1, p.y); }
   makeClouds(x0, x1, z0, z1, minY, y1);
+  makeDecor(theme.decor, x0, x1, z0, z1, minY);
 }
 
 // ---------- Player ----------
@@ -2675,6 +2769,30 @@ const SONGS = {
       if (this.mel[i]) M.bell(this.mel[i], d, 0.03, S * 6);
     } },
 };
+// Candy Land: bubbly F major with pizzicato arps and a glockenspiel tune
+SONGS.candy = { bpm: 124, chords: [[53, 57, 60], [50, 53, 57], [46, 50, 53], [48, 52, 55]],
+  mel: { 0: 77, 4: 81, 8: 84, 12: 81, 16: 79, 20: 77, 24: 74, 28: 77, 32: 77, 36: 81, 40: 82, 44: 84, 48: 86, 52: 84, 56: 81, 60: 79 },
+  play(i, d, S) {
+    const st = i % 16, ch = this.chords[i >> 4];
+    if (st === 0 || st === 10) M.kick(d, 0.35);
+    if (st === 4 || st === 12) M.snare(d, 0.1);
+    if (i % 2) M.shaker(d, 0.025);
+    M.pluck(ch[[0, 1, 2, 1][i % 4]] + 12 + (st >= 8 ? 12 : 0), d, 0.025, S * 0.8, 'triangle');
+    if (st % 4 === 0) M.bass(ch[0] - 12 + (st === 8 ? 7 : 0), S * 2, d, 0.12);
+    if (this.mel[i]) M.bell(this.mel[i], d, 0.04, S * 4);
+  } };
+// Arcade: fast chiptune in A minor, square-wave lead over pulse arps and noise drums
+SONGS.arcade = { bpm: 140, chords: [[57, 60, 64], [53, 57, 60], [55, 59, 62], [52, 56, 59]],
+  mel: { 0: 81, 3: 84, 6: 88, 8: 86, 10: 84, 12: 81, 16: 77, 19: 81, 22: 84, 24: 86, 28: 84, 32: 79, 35: 83, 38: 86, 40: 88, 44: 86, 48: 83, 52: 80, 56: 83, 60: 88 },
+  play(i, d, S) {
+    const st = i % 16, ch = this.chords[i >> 4];
+    if (st % 8 === 0) M.kick(d, 0.5);
+    if (st === 4 || st === 12) noiseHit(0.08, 0.2, 3000, d, 'bandpass', musicGain);
+    if (i % 2) M.hat(d, 0.03);
+    M.pluck(ch[i % 3] + 12, d, 0.018, S * 0.7, 'square');
+    if (i % 2 === 0) M.bass(ch[0] - 12 + (i % 4 ? 12 : 0), S * 1.6, d, 0.1, 'triangle');
+    if (this.mel[i]) M.pluck(this.mel[i], d, 0.045, S * 2.5, 'square');
+  } };
 let song = SONGS.overworld;
 let nextStep = 0, stepIdx = 0, musicTimer = null;
 function scheduleMusic() {
@@ -2962,6 +3080,7 @@ function collide(p) {
   const ox = p.hx + PR - Math.abs(lx), oy = p.hy + PH - Math.abs(dy), oz = p.hz + PR - Math.abs(lz);
   if (ox <= 0 || oy <= 0 || oz <= 0) return false;
   if (p.kill) {
+    if (p.flooded) { lavaCaught(); return true; }
     if (pl.invuln > 0) return false;
     die('kill'); return true;
   }
@@ -3250,7 +3369,7 @@ function win() {
   $('winStats').innerHTML = `Time: ${elapsed.toFixed(1)}s · Deaths: ${deaths}<br>` +
     (newBest ? '🏆 New best time!' : `Best: ${prev.toFixed(1)}s`) +
     `<br>🪙 +${earned} coins <span style="color:#a8a8a8">(${runCoins} grabbed + ${bonus} finish bonus)</span>` +
-    (place ? `<br>🏁 Race: ${placeText(place)} place!` : '');
+    (place ? (race?.lava ? `<br>🌋 You escaped the lava — ${placeText(place)}!` : `<br>🏁 Race: ${placeText(place)} place!`) : '');
   $('win').style.display = 'flex';
   document.exitPointerLock?.();
 }
@@ -3273,7 +3392,7 @@ function start() {
   mp.info = { seed, n: stages, d: diff, w: pick };
   mpJoin(courseKey);
   cpIndex = 0; deaths = 0; elapsed = 0; running = false; finished = false; simTime = 0; runCoins = 0; pl.power = null;
-  race = null; skipped = false;
+  race = null; skipped = false; setLavaSea(false);
   $('win').style.display = 'none';
   $('total').textContent = stages;
   respawn(); ghostReset();
@@ -3709,11 +3828,14 @@ async function mpJoin(course) {
     } else if (d.t === 'cp' && Number.isInteger(d.n)) {
       sysLine(`${p.name} reached checkpoint ${d.n}`);
     } else if (d.t === 'race' && typeof d.id === 'string' && d.id.length <= 12 && Number.isFinite(d.in) && d.in >= 1000 && d.in <= 10000) {
-      startRace(d.id, d.in, p.name);
+      startRace(d.id, d.in, p.name, d.lava === true);
+    } else if (d.t === 'lavaOut' && race?.lava && d.id === race.id && Number.isFinite(d.time) && Number.isInteger(d.stage)) {
+      sysLine(`🔥 ${p.name} got caught by the lava on stage ${d.stage} (${d.time.toFixed(1)}s)`);
+      for (let i = 0; i < 2; i++) burst(x, y, z, 20, 16, tmpColor.setHSL(0.05, 1, 0.55), 1, 0.7, 20);
     } else if (d.t === 'win' && Number.isFinite(d.time)) {
       if (race && d.race === race.id) {
         race.results.push({ name: p.name, time: d.time });
-        sysLine(`🏁 ${p.name} finished ${placeText(race.results.length)} in ${d.time.toFixed(1)}s!`);
+        sysLine(`${race.lava ? '🌋' : '🏁'} ${p.name} ${race.lava ? 'escaped the lava' : 'finished'} ${placeText(race.results.length)} in ${d.time.toFixed(1)}s!`);
       } else sysLine(`🏆 ${p.name} finished in ${d.time.toFixed(1)}s!`);
       burst(x, y, z, 40, 16, tmpColor.set(0xffd84a), 1.2, 0.6, 10);
     } else if (d.t === 'chat' && typeof d.text === 'string') {
@@ -3910,16 +4032,64 @@ function updatePeers(dt) {
 // countdown, and finishers are ranked in the order their wins arrive.
 let race = null;   // { id, at: performance.now() of GO, results, done, beep }
 const placeText = n => ['🥇 1st', '🥈 2nd', '🥉 3rd'][n - 1] || `${n}th`;
-function startRace(id, inMs, by) {
+function startRace(id, inMs, by, lava = false) {
   if (race?.id === id) return;
   if (race && !race.done && performance.now() < race.at + 3000) return;   // one at a time
-  race = { id, at: performance.now() + inMs, results: [], done: false, beep: null };
+  race = { id, at: performance.now() + inMs, results: [], done: false, beep: null, lava };
+  setLavaSea(lava);
   cpIndex = 0; deaths = 0; elapsed = 0; running = false; finished = false; runCoins = 0; pl.power = null;
   for (const c of coins) { c.got = false; c.mesh.visible = true; }
   $('win').style.display = 'none';
   respawn(); ghostReset();
-  sysLine(by ? `🏁 ${by} started a race!` : mp.peers.size ? '🏁 Race starting!' : '🏁 Solo race (no one else on this course)');
+  if (lava) sysLine(by ? `🌋 ${by} started Floor is Lava! The course turns to lava behind you — reach the finish!` : '🌋 Floor is Lava! The course turns to lava behind you — reach the finish!');
+  else sysLine(by ? `🏁 ${by} started a race!` : mp.peers.size ? '🏁 Race starting!' : '🏁 Solo race (no one else on this course)');
 }
+$('lavaBtn').onclick = e => {
+  const id = Math.random().toString(36).slice(2, 10);
+  startRace(id, 5000, '', true); mpEvent({ t: 'race', id, in: 5000, lava: true });
+  e.target.blur();
+};
+
+// ---------- Floor is Lava ----------
+// A few seconds after GO the course starts turning into lava from the start, one piece at a
+// time, and the flood keeps creeping forward. Stay ahead of it and reach the finish; step on
+// the lava and you're out of the round.
+const LAVA_SECS_PER_STAGE = { easy: 22, normal: 16, hard: 12 }, LAVA_HEAD_START = 4;
+let lavaSea = null;   // { list: parts in course order, n: how many are flooded, rate: parts per second, t }
+function setLavaSea(on) {
+  if (lavaSea) for (const p of lavaSea.list.slice(0, lavaSea.n)) { p.kill = false; p.flooded = false; p.mesh.material = p.preFlood; }
+  lavaSea = null;
+  if (!on) return;
+  // only solid, ordinary pieces flood (glass and hidden platforms come and go on their own)
+  const list = parts.filter(p => p.solid && !p.kill && !p.vanish && !p.hiddenBy && !p.lava);
+  const diff = courseKey.split('|')[2];
+  lavaSea = { list, n: 0, t: -LAVA_HEAD_START, rate: list.length / ((checkpoints.length - 1) * (LAVA_SECS_PER_STAGE[diff] || 16)) };
+}
+function floodNext() {
+  const p = lavaSea.list[lavaSea.n++];
+  p.preFlood = p.mesh.material; p.mesh.material = MAT.lava; p.kill = true; p.flooded = true;
+  burst(p.x, p.y + p.hy, p.z, 10, 6, tmpColor.setHSL(0.05 + Math.random() * 0.06, 1, 0.55), 0.8, 0.5, 10);
+  if (soundOn && actx && Math.hypot(p.x - pl.x, p.z - pl.z) < 30) noiseHit(0.4, 0.08, 1200, 0, 'bandpass');   // sizzle
+}
+function updateLavaSea(dt) {
+  if (!lavaSea) return;
+  if (!race?.lava) { setLavaSea(false); return; }
+  if (performance.now() < race.at || race.out || finished) return;
+  lavaSea.t += dt;
+  while (lavaSea.t > 0 && lavaSea.n < lavaSea.list.length && lavaSea.n < lavaSea.t * lavaSea.rate) floodNext();
+}
+// stepping on flooded ground knocks you out of the round
+function lavaCaught() {
+  if (race.out) return;
+  race.out = true; running = false;
+  for (let i = 0; i < 3; i++) burst(pl.x, pl.y, pl.z, 20, 18, tmpColor.setHSL(0.05 + Math.random() * 0.08, 1, 0.55), 1.2, 0.8, 20);
+  SFX.oof(); SFX.boom(); fx.shake = 1.2;
+  sysLine(`🌋 The lava got you after ${elapsed.toFixed(1)}s, on stage ${cpIndex}!`);
+  flashText('🔥 The lava got you!');
+  mpEvent({ t: 'lavaOut', id: race.id, time: elapsed, stage: cpIndex });
+  setTimeout(() => { if (race?.out) { race = null; setLavaSea(false); respawn(); } }, 2500);
+}
+const lavaStage = () => lavaSea && lavaSea.n ? lavaSea.list[lavaSea.n - 1].stage : 0;
 $('raceBtn').onclick = e => {
   const id = Math.random().toString(36).slice(2, 10);
   startRace(id, 5000); mpEvent({ t: 'race', id, in: 5000 });
@@ -4153,7 +4323,7 @@ function frame(now) {
       emit(c.position.x + r(), c.position.y + r() * 1.6, c.position.z + r(), tmpColor.setHSL(0.8 + Math.random() * 0.05, 1, 0.45 + Math.random() * 0.25),
         r() * 0.4, -0.6 + Math.random() * 1.2, r() * 0.4, 1.2, 0.18, 0);
     }
-  updateRace(); updateGhost(dt); updateRockets(dt);
+  updateRace(); updateLavaSea(dt); updateGhost(dt); updateRockets(dt);
   // speed lines when you're flung, falling fast or boosted
   const lines = settings.speedLines ? Math.min(1, fx.fovKick * 0.8 + Math.max(0, -pl.vy - 30) / 40 + (pl.power?.type === 'speed' && moving ? 0.35 : 0)) : 0;
   const sl = $('speedLines'); sl.style.opacity = lines.toFixed(2);
@@ -4209,6 +4379,8 @@ function frame(now) {
     if (theme.ambient === 'embers') emit(x, pl.y - 6 + Math.random() * 6, z, tmpColor.setHSL(0.04 + Math.random() * 0.06, 1, 0.55), 0, 3 + Math.random() * 3, 0, 2.5, 0.25, -1);
     else if (theme.ambient === 'snow') emit(x, pl.y + 12 + Math.random() * 6, z, tmpColor.set(0xffffff), 0.6, -4, 0.3, 4, 0.3, 0);
     else if (theme.ambient === 'xp') emit(x, pl.y - 4 + Math.random() * 10, z, tmpColor.set(rand([0xf35325, 0x81bc06, 0x05a6f0, 0xffba08])), 0, 0.8, 0, 3, 0.35, 0);
+    else if (theme.ambient === 'candy') emit(x, pl.y + 10 + Math.random() * 6, z, tmpColor.set(rand(SPRINKLES)), 0.3, -3.5, 0.2, 4, 0.28, 0);
+    else if (theme.ambient === 'arcade') emit(x, pl.y - 6 + Math.random() * 6, z, tmpColor.set(rand([0x00e5ff, 0xff2bd6, 0xffe14a, 0x39ff14])), 0, 2.5, 0, 3, 0.4, 0);
     else emit(x, pl.y - 4 + Math.random() * 10, z, tmpColor.setHSL(0.75 + Math.random() * 0.1, 0.8, 0.7), 0, 0.6, 0, 3, 0.3, 0);
   }
   MAT.lava.emissiveIntensity = 0.9 + Math.sin(now / 400) * 0.15;
@@ -4236,7 +4408,8 @@ function frame(now) {
   const best = bestTimes[courseKey];
   $('bestHud').textContent = best ? `🏆 best ${best.toFixed(1)}s` : '';
   $('bestHud').style.display = best ? 'block' : 'none';
-  $('powerHud').textContent = pl.power ? `${POWERS[pl.power.type].icon} ${POWERS[pl.power.type].name} ${pl.power.t.toFixed(1)}s` : '';
+  $('powerHud').textContent = (pl.power ? `${POWERS[pl.power.type].icon} ${POWERS[pl.power.type].name} ${pl.power.t.toFixed(1)}s ` : '') +
+    (lavaSea && !race?.out ? (lavaSea.t < 0 ? `🌋 lava in ${Math.ceil(-lavaSea.t)}s` : `🌋 lava on stage ${lavaStage()}`) : '');
   $('stage').textContent = cpIndex;
   $('stageBar').style.width = (totalStages ? cpIndex / totalStages * 100 : 0) + '%';
   $('time').textContent = elapsed.toFixed(1);

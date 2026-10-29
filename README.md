@@ -16,7 +16,7 @@ A Minecraft-style obby (obstacle course) generator that runs in your browser —
   - 🪜 **Ladders and vines** up tall pillars (just walk into them to climb)
   - 🌀 **Portals** that teleport you across gaps far too wide to jump
   - 🔓 **Levers** that make hidden glass stepping stones appear for a few seconds
-- **Five worlds** — Overworld, Nether, Frozen Peaks, The End and 🪟 Windows XP (Bliss sky and hills, explorer-window and taskbar platforms, Start-button checkpoints, and its own startup chime), each with its own blocks, sky and floating particles. Pick one or let the seed choose.
+- **Seven worlds** — Overworld, Nether, Frozen Peaks, The End, 🪟 Windows XP, 🍭 Candy Land (frosted cake, chocolate and candy-cane platforms, gummy checkpoints, caramel lava, giant lollipops, falling sprinkles) and 👾 Arcade (glowing neon blocks, hot-pink lava, a synthwave grid floor and a chiptune song) (Bliss sky and hills, explorer-window and taskbar platforms, Start-button checkpoints, and its own startup chime), each with its own blocks, sky and floating particles. Pick one or let the seed choose.
 - **Power-ups** — ⚡ speed boost, 🦘 super jump (with a triple jump) and 🛡️ a shield that saves you from one lava hit.
 - **Coins and a hat shop** — grab 🪙 along the course; they're banked when you finish, plus a finish bonus. Spend them on hats like a crown, top hat, halo or a spinning propeller cap.
 - **Pets** — adopt a 🐶 dog, 🐱 cat, 🦆 duck, 🟩 slime, 💚 creeper, 🐝 bee or 🐉 dragon in the 🛒 shop. Walkers hop along behind you, the bee and dragon fly with flapping wings, and other players see your pet too.
@@ -32,6 +32,7 @@ A Minecraft-style obby (obstacle course) generator that runs in your browser —
 - **Tweenslop animation** — squash and stretch, flips, bobble head, screen shake and meme popups.
 - **Emotes** — dance, wave, dab, floss, sit, cheer, breakdance, laugh, play dead… or explode 💥.
 - **Multiplayer** — everyone on the same course plays together, with name tags and chat. Press **🏁 Race** for a countdown race where everyone restarts together and finishers are ranked 🥇🥈🥉.
+- **🌋 Floor is Lava** — press **🌋 Lava** (Online tab). After a 4-second head start the course turns into lava piece by piece, starting from the beginning and creeping forward. Stay ahead of it and reach the finish; touch the lava and you're out. With friends, everyone starts together and finishers are ranked 🥇🥈🥉.
 - **Settings** — volume, music, look sensitivity, field of view, and toggles for shadows, screen shake, meme popups, speed lines, the ghost, realistic textures and day & night.
 - **A song for every world** — original music made in code (so it's copyright-free): a bouncy adventure tune in the Overworld, war drums and a growling bass in the Nether, a sparkly music box in Frozen Peaks, spacey synthwave in The End and easy-listening lounge in Windows XP. The music goes quiet when you stand still, and your character's dance follows each song's beat.
 - **Day and night** — the Overworld, Frozen Peaks and Windows XP cycle through sunrise, day, an orange sunset and a starry night with a moon (fireflies come out in the Overworld). A full day takes 5 minutes, and everyone online shares the same time of day. Turn it off with **🌗 Day & night** in ⚙️ Settings.
