@@ -213,7 +213,7 @@
     <div class="row">
       <button id="srvBtn">🖥️ Servers</button>
       <button id="raceBtn">🏁 Race</button>
-      <button id="lavaBtn" title="Floor is Lava: the course turns to lava behind you, reach the finish">🌋 Lava</button>
+      <button id="lavaBtn" title="Floor is Lava: climb a tower while lava rises below you">🌋 Lava</button>
     </div>
     <div class="row">
       <button id="soundBtn">🔊 Sound</button>
@@ -1503,7 +1503,7 @@ function clearCourse() {
 
 function generate(seed, stages, diff, world) {
   clearCourse();
-  buildStage = 0;
+  buildStage = 0; towerOn = false;
   theme = THEMES[world];
   applyTheme(theme);
   const rng = mulberry32(hashStr(`${seed}|${stages}|${diff}`));
@@ -3080,7 +3080,6 @@ function collide(p) {
   const ox = p.hx + PR - Math.abs(lx), oy = p.hy + PH - Math.abs(dy), oz = p.hz + PR - Math.abs(lz);
   if (ox <= 0 || oy <= 0 || oz <= 0) return false;
   if (p.kill) {
-    if (p.flooded) { lavaCaught(); return true; }
     if (pl.invuln > 0) return false;
     die('kill'); return true;
   }
@@ -3364,10 +3363,10 @@ function win() {
   // bank the coins grabbed on the way plus a finish bonus, and check the best time
   const bonus = 5 + Math.floor(totalStages / 2), earned = runCoins + bonus;
   wallet += earned; store.set('obbyWallet', wallet);
-  const prev = bestTimes[courseKey], newBest = !(prev <= elapsed);
+  const prev = bestTimes[courseKey], newBest = !race?.lava && !(prev <= elapsed);
   if (newBest) { bestTimes[courseKey] = +elapsed.toFixed(2); store.set('obbyBest', bestTimes); saveGhost(); }
   $('winStats').innerHTML = `Time: ${elapsed.toFixed(1)}s · Deaths: ${deaths}<br>` +
-    (newBest ? '🏆 New best time!' : `Best: ${prev.toFixed(1)}s`) +
+    (race?.lava ? '🌋 You climbed the tower!' : newBest ? '🏆 New best time!' : `Best: ${prev.toFixed(1)}s`) +
     `<br>🪙 +${earned} coins <span style="color:#a8a8a8">(${runCoins} grabbed + ${bonus} finish bonus)</span>` +
     (place ? (race?.lava ? `<br>🌋 You escaped the lava — ${placeText(place)}!` : `<br>🏁 Race: ${placeText(place)} place!`) : '');
   $('win').style.display = 'flex';
@@ -4036,12 +4035,13 @@ function startRace(id, inMs, by, lava = false) {
   if (race?.id === id) return;
   if (race && !race.done && performance.now() < race.at + 3000) return;   // one at a time
   race = { id, at: performance.now() + inMs, results: [], done: false, beep: null, lava };
-  setLavaSea(lava);
+  if (lava) setLavaSea(true, buildTower(id));
+  else { setLavaSea(false); rebuildCourse(); }
   cpIndex = 0; deaths = 0; elapsed = 0; running = false; finished = false; runCoins = 0; pl.power = null;
   for (const c of coins) { c.got = false; c.mesh.visible = true; }
   $('win').style.display = 'none';
   respawn(); ghostReset();
-  if (lava) sysLine(by ? `🌋 ${by} started Floor is Lava! The course turns to lava behind you — reach the finish!` : '🌋 Floor is Lava! The course turns to lava behind you — reach the finish!');
+  if (lava) sysLine(by ? `🌋 ${by} started Floor is Lava! Climb the tower before the lava catches you!` : '🌋 Floor is Lava! Climb the tower before the lava catches you!');
   else sysLine(by ? `🏁 ${by} started a race!` : mp.peers.size ? '🏁 Race starting!' : '🏁 Solo race (no one else on this course)');
 }
 $('lavaBtn').onclick = e => {
@@ -4051,45 +4051,110 @@ $('lavaBtn').onclick = e => {
 };
 
 // ---------- Floor is Lava ----------
-// A few seconds after GO the course starts turning into lava from the start, one piece at a
-// time, and the flood keeps creeping forward. Stay ahead of it and reach the finish; step on
-// the lava and you're out of the round.
-const LAVA_SECS_PER_STAGE = { easy: 22, normal: 16, hard: 12 }, LAVA_HEAD_START = 4;
-let lavaSea = null;   // { list: parts in course order, n: how many are flooded, rate: parts per second, t }
-function setLavaSea(on) {
-  if (lavaSea) for (const p of lavaSea.list.slice(0, lavaSea.n)) { p.kill = false; p.flooded = false; p.mesh.material = p.preFlood; }
-  lavaSea = null;
-  if (!on) return;
-  // only solid, ordinary pieces flood (glass and hidden platforms come and go on their own)
-  const list = parts.filter(p => p.solid && !p.kill && !p.vanish && !p.hiddenBy && !p.lava);
-  const diff = courseKey.split('|')[2];
-  lavaSea = { list, n: 0, t: -LAVA_HEAD_START, rate: list.length / ((checkpoints.length - 1) * (LAVA_SECS_PER_STAGE[diff] || 16)) };
+// The round swaps the course for a tall tower: platforms spiral up around a central column
+// while a sea of lava rises from below. Touch the lava and you're out; reach the top to
+// escape. Everyone builds the same tower from the round's id; afterwards the course returns.
+const TOWER_SECS_PER_STEP = { easy: 2.3, normal: 1.7, hard: 1.3 }, LAVA_HEAD_START = 6;
+let lavaSea = null;   // { mesh, y, speed, t }
+let towerOn = false;
+function buildTower(id) {
+  const [, stagesS, diff] = courseKey.split('|');
+  clearCourse();
+  towerOn = true;
+  const rng = mulberry32(hashStr('tower|' + id)), R = (a, b) => a + rng() * (b - a);
+  const steps = Math.min(90, Math.max(24, +stagesS * 6)), hard = diff === 'hard', easy = diff === 'easy';
+  const coin = (x, y, z) => {
+    const mesh = new THREE.Mesh(coinGeo, MAT.coin);
+    mesh.position.set(x, y, z); mesh.castShadow = true; course.add(mesh);
+    const glow = new THREE.Sprite(coinGlow); glow.scale.setScalar(3.4); mesh.add(glow);
+    coins.push({ x, y, z, mesh, got: false });
+  };
+  const at = (a, r) => ({ x: Math.sin(a) * r, z: Math.cos(a) * r });
+  let a = 0, y = 0;
+  const spawn = addPart({ ...at(a, 10), y, sx: 8, sy: 1, sz: 8, yaw: a, block: theme.biomes[0] });
+  checkpoints.push({ x: spawn.x, y: y + 3, z: spawn.z, ang: a + Math.PI / 2 });
+  let cp = 0;
+  for (let i = 1; i <= steps; i++) {
+    buildStage = cp + 1;
+    a += R(0.42, 0.6); y += hard ? R(2.4, 3.3) : easy ? R(1.6, 2.4) : R(2, 2.9);
+    const r = R(9.5, 11), pos = at(a, r), blk = theme.biomes[Math.floor(i / 10) % theme.biomes.length];
+    const size = hard ? R(2.6, 3.4) : R(3.2, 4);
+    if (i === steps || i % 12 === 0) {
+      // rest platform with a checkpoint (the last one is the finish at the top)
+      const fin = i === steps;
+      const p = addPart({ ...pos, y, sx: 6, sy: 1, sz: 6, yaw: a, block: fin ? 'gold' : theme.cp });
+      cp++;
+      addPart({ x: p.x, y: y + 0.6, z: p.z, sx: 4, sy: 0.2, sz: 4, yaw: a, solid: false, block: fin ? 'diamond' : 'emerald', checkpoint: cp, finish: fin });
+      checkpoints.push({ x: p.x, y: y + 3.6, z: p.z, ang: a + Math.PI / 2 });
+      const label = textSprite(fin ? 'TOP!' : String(cp), fin ? '#ffd84a' : '#fff');
+      label.position.set(p.x, y + 6, p.z); course.add(label);
+      continue;
+    }
+    const k = rng();
+    if (k < 0.12) addPart({ ...pos, y, sx: size, sy: 1, sz: size, yaw: a, block: 'planks', move: { axis: 'x', amp: 1.6, speed: R(1, 1.6), phase: R(0, 6.28) } });
+    else if (k < 0.22) addPart({ ...pos, y, sx: size, sy: 1, sz: size, yaw: a, block: 'glass', vanish: true });
+    else if (k < 0.3) { addPart({ ...pos, y, sx: size, sy: 1, sz: size, yaw: a, block: 'slime', bounce: true }); y += 5; }
+    else if (k < 0.37) addPart({ ...pos, y, sx: size, sy: 1, sz: size, yaw: a, block: 'ice' });
+    else {
+      addPart({ ...pos, y, sx: size, sy: 1, sz: size, yaw: a, block: blk });
+      if (rng() < 0.3) coin(pos.x, y + 2.3, pos.z);
+    }
+  }
+  buildStage = 0;
+  // the column the stairs wind around
+  const top = y + 2;
+  addPart({ x: 0, y: top / 2 - 2, z: 0, sx: 8, sy: top + 4, sz: 8, block: theme.biomes[1] });
+  totalStages = cp; $('total').textContent = cp;
+  makeClouds(-80, 80, -80, 80, 0, top);
+  makeDecor(theme.decor, -80, 80, -80, 80, 0);
+  return { top, steps };
 }
-function floodNext() {
-  const p = lavaSea.list[lavaSea.n++];
-  p.preFlood = p.mesh.material; p.mesh.material = MAT.lava; p.kill = true; p.flooded = true;
-  burst(p.x, p.y + p.hy, p.z, 10, 6, tmpColor.setHSL(0.05 + Math.random() * 0.06, 1, 0.55), 0.8, 0.5, 10);
-  if (soundOn && actx && Math.hypot(p.x - pl.x, p.z - pl.z) < 30) noiseHit(0.4, 0.08, 1200, 0, 'bandpass');   // sizzle
+// put the normal course back after a tower round
+function rebuildCourse() {
+  if (!towerOn) return;
+  const [seed, n, diff, world] = courseKey.split('|');
+  generate(seed, +n, diff, world);
+  $('total').textContent = totalStages;
+}
+function setLavaSea(on, tower) {
+  if (lavaSea) { scene.remove(lavaSea.mesh); lavaSea.mesh.geometry.dispose(); lavaSea = null; }
+  if (!on) return;
+  const g = new THREE.PlaneGeometry(600, 600).rotateX(-Math.PI / 2), uv = g.attributes.uv;
+  for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * 300, uv.getY(i) * 300);   // one tile per 2 units, like the blocks
+  const mesh = new THREE.Mesh(g, MAT.lava), y = -6, diff = courseKey.split('|')[2];
+  mesh.position.set(0, y, 0); scene.add(mesh);
+  lavaSea = { mesh, y, t: -LAVA_HEAD_START, speed: (tower.top - y) / (tower.steps * (TOWER_SECS_PER_STEP[diff] || 1.7)) };
 }
 function updateLavaSea(dt) {
   if (!lavaSea) return;
   if (!race?.lava) { setLavaSea(false); return; }
   if (performance.now() < race.at || race.out || finished) return;
-  lavaSea.t += dt;
-  while (lavaSea.t > 0 && lavaSea.n < lavaSea.list.length && lavaSea.n < lavaSea.t * lavaSea.rate) floodNext();
+  if ((lavaSea.t += dt) > 0) lavaSea.y += lavaSea.speed * dt;
+  lavaSea.mesh.position.y = lavaSea.y;
+  // sparks off the surface near you
+  if (pl.y - lavaSea.y < 30 && Math.random() < dt * 25) {
+    const ang = Math.random() * Math.PI * 2, r = Math.random() * 18;
+    emit(pl.x + Math.cos(ang) * r, lavaSea.y + 0.2, pl.z + Math.sin(ang) * r, tmpColor.setHSL(0.05 + Math.random() * 0.07, 1, 0.55),
+      (Math.random() - 0.5) * 2, 4 + Math.random() * 5, (Math.random() - 0.5) * 2, 1.1, 0.3, 9);
+  }
+  if (pl.y - PH < lavaSea.y + 0.2) lavaCaught();
 }
-// stepping on flooded ground knocks you out of the round
 function lavaCaught() {
   if (race.out) return;
   race.out = true; running = false;
   for (let i = 0; i < 3; i++) burst(pl.x, pl.y, pl.z, 20, 18, tmpColor.setHSL(0.05 + Math.random() * 0.08, 1, 0.55), 1.2, 0.8, 20);
   SFX.oof(); SFX.boom(); fx.shake = 1.2;
-  sysLine(`🌋 The lava got you after ${elapsed.toFixed(1)}s, on stage ${cpIndex}!`);
+  sysLine(`🌋 The lava got you after ${elapsed.toFixed(1)}s, at checkpoint ${cpIndex}!`);
   flashText('🔥 The lava got you!');
   mpEvent({ t: 'lavaOut', id: race.id, time: elapsed, stage: cpIndex });
-  setTimeout(() => { if (race?.out) { race = null; setLavaSea(false); respawn(); } }, 2500);
+  setTimeout(() => { if (race?.out) endLavaRound(); }, 2500);
 }
-const lavaStage = () => lavaSea && lavaSea.n ? lavaSea.list[lavaSea.n - 1].stage : 0;
+function endLavaRound() {
+  race = null; setLavaSea(false); rebuildCourse();
+  cpIndex = 0; elapsed = 0; running = false; finished = false;
+  $('win').style.display = 'none';
+  respawn(); ghostReset();
+}
 $('raceBtn').onclick = e => {
   const id = Math.random().toString(36).slice(2, 10);
   startRace(id, 5000); mpEvent({ t: 'race', id, in: 5000 });
@@ -4142,7 +4207,7 @@ function updateGhost(dt) {
     ghost.recT += GHOST_RATE;
     ghost.rec.push(packState().slice(0, 21));
   }
-  const gd = ghost.data, show = settings.ghost && gd && running && !finished;
+  const gd = ghost.data, show = settings.ghost && gd && running && !finished && !towerOn;
   ghost.char.visible = !!show;
   if (!show) return;
   const f = Math.min(elapsed / GHOST_RATE, gd.s.length - 1), i = Math.floor(f), k = f - i;
@@ -4409,7 +4474,7 @@ function frame(now) {
   $('bestHud').textContent = best ? `🏆 best ${best.toFixed(1)}s` : '';
   $('bestHud').style.display = best ? 'block' : 'none';
   $('powerHud').textContent = (pl.power ? `${POWERS[pl.power.type].icon} ${POWERS[pl.power.type].name} ${pl.power.t.toFixed(1)}s ` : '') +
-    (lavaSea && !race?.out ? (lavaSea.t < 0 ? `🌋 lava in ${Math.ceil(-lavaSea.t)}s` : `🌋 lava on stage ${lavaStage()}`) : '');
+    (lavaSea && !race?.out ? (lavaSea.t < 0 ? `🌋 lava rises in ${Math.ceil(-lavaSea.t)}s` : `🌋 ${Math.max(0, pl.y - PH - lavaSea.y).toFixed(0)} above lava`) : '');
   $('stage').textContent = cpIndex;
   $('stageBar').style.width = (totalStages ? cpIndex / totalStages * 100 : 0) + '%';
   $('time').textContent = elapsed.toFixed(1);
