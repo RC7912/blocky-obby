@@ -1843,10 +1843,12 @@ function bananaRig(body, mats, pivot) {
     rigMesh(new THREE.SphereGeometry(r, 18, 12), t < 0.06 || t > 0.94 ? mats.hat : mats.peel,
       2.4 + Math.cos(a) * 2.9, 0.7 + Math.sin(a) * 2.9, 0, body, [1, 1, 0.9]);
   }
-  const head = pivot(-0.4, 0.8, 0);
-  googlyEyes(mats, head, 0.2, 0.35, 0.5, 0.17);
-  const smile = rigMesh(new THREE.TorusGeometry(0.22, 0.04, 8, 16, Math.PI), mats.ink, 0, 0.02, 0.56, head);
+  // the face rides on the body, not the shrinking head, so it stays on the peel when it stretches
+  const face = new THREE.Group(); face.position.set(-0.4, 0.8, 0); body.add(face);
+  googlyEyes(mats, face, 0.2, 0.35, 0.5, 0.17);
+  const smile = rigMesh(new THREE.TorusGeometry(0.22, 0.04, 8, 16, Math.PI), mats.ink, 0, 0.02, 0.56, face);
   smile.rotation.z = Math.PI;
+  const head = pivot(-0.4, 0.8, 0);
   const arm = sx => {
     const p = pivot(sx * 0.62, 0.7, 0);
     rigMesh(new THREE.CylinderGeometry(0.06, 0.06, 1.3, 8), mats.legs, 0, -0.65, 0, p);
