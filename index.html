@@ -1635,6 +1635,7 @@ const SKINS = {
   ocean:   { name: 'Ocean Wave', skin: 0xbfe9ff, torso: 0x0077b6, legs: 0x023e8a, cape: 0x00b4d8, hat: 0xffffff, glow: 0.2, trail: 'cape' },
   candy:   { name: 'Cotton Candy', skin: 0xffe5ec, torso: 0xff8fab, legs: 0xa2d2ff, cape: 0xcdb4db, hat: 0xffc8dd, glow: 0, trail: 'rainbow' },
   toxic:   { name: 'Toxic', skin: 0x9ef01a, torso: 0x1b1b1b, legs: 0x38b000, cape: 0x70e000, hat: 0x1b1b1b, glow: 0.6, trail: 'cape' },
+  creeper: { name: '💚 Creeper', skin: 0x5ac94f, torso: 0x3fa53a, legs: 0x2f8a2a, cape: 0x1a1a1a, hat: 0x5ac94f, glow: 0, trail: 'torso', style: 'creeper' },
   bigboned: { name: 'Big Boned', skin: 0xf6d2ae, torso: 0xd7262e, legs: 0x7b4a24, cape: 0xf3c70f, hat: 0x17b3ae, glow: 0, trail: 'cape' },
 };
 let customSkin = null;
@@ -1667,6 +1668,16 @@ const pantsTex = pixelTex((g, s) => {
 }, 16, false);
 const phong = extra => new THREE.MeshLambertMaterial(extra);
 
+// Creeper: mottled green-and-grey pixels, and the famous frowning face
+const CREEPER_PAL = ['#3ec13a', '#5ad44f', '#7ee070', '#2ea52a', '#4cbf44', '#9be88f', '#1e8a1e', '#d2dccd', '#aeb9ab'];
+const creeperTex = pixelTex((g, s) => speckle(g, s, CREEPER_PAL), 16, false);
+const creeperFaceTex = pixelTex((g, s) => {
+  speckle(g, s, CREEPER_PAL);
+  g.fillStyle = '#0b0b0b';
+  g.fillRect(1, 2, 2, 2); g.fillRect(5, 2, 2, 2);                       // eyes
+  g.fillRect(3, 4, 2, 2); g.fillRect(2, 5, 4, 2); g.fillRect(2, 7, 1, 1); g.fillRect(5, 7, 1, 1);   // mouth
+  g.fillStyle = '#1e1e1e'; g.fillRect(3, 6, 2, 1);
+}, 8, false);
 const makeMats = () => ({
   skin: phong(),
   face: phong({ map: faceTex }),
@@ -1682,6 +1693,9 @@ const makeMats = () => ({
   eye: new THREE.MeshBasicMaterial({ color: 0xffffff }),
   ink: new THREE.MeshBasicMaterial({ color: 0x111111 }),
   outline: new THREE.MeshBasicMaterial({ color: 0x111111, side: THREE.BackSide }),
+  creeper: phong({ map: creeperTex }),
+  creeperFace: phong({ map: creeperFaceTex }),
+  creeperFeet: phong({ map: creeperTex, color: 0x8a8a8a }),
 });
 const mats = makeMats();
 let currentSkin = SKINS.classic;
@@ -1701,7 +1715,7 @@ function paintMats(mats, s) {
 
 // STYLES: how a character is built. Every style has the same joints (body, head, limbs,
 // two-piece cape) at the same height, so animation, emotes and multiplayer work unchanged.
-const STYLES = { roblox: '🧱 Roblox', southpark: '✂️ South Park' };
+const STYLES = { roblox: '🧱 Roblox', southpark: '✂️ South Park', creeper: '💚 Creeper' };
 const cleanStyle = st => Object.hasOwn(STYLES, st) ? st : 'roblox';
 function makeCharacter(mats, style = 'roblox') {
   const root = new THREE.Group();
@@ -1715,10 +1729,12 @@ function buildBody(root, mats, style) {
   const body = new THREE.Group();
   root.add(body);
   const pivot = (x, y, z, parent = body) => { const p = new THREE.Group(); p.position.set(x, y, z); parent.add(p); return p; };
-  const joints = style === 'southpark' ? southParkRig(body, mats, pivot) : robloxRig(body, mats, pivot);
+  const joints = style === 'southpark' ? southParkRig(body, mats, pivot)
+    : style === 'creeper' ? creeperRig(body, mats, pivot) : robloxRig(body, mats, pivot);
   // shop hats sit on top of the head; the South Park head is much bigger, so they scale up
   const hatAnchor = new THREE.Group();
   if (style === 'southpark') { hatAnchor.position.set(0, 2.55, 0.3); hatAnchor.scale.set(3, 2.2, 2.6); }
+  else if (style === 'creeper') { hatAnchor.position.set(0, 1.6, 0); hatAnchor.scale.setScalar(1.3); }
   else hatAnchor.position.set(0, 1.2, 0);
   joints.head.add(hatAnchor);
   Object.assign(root.userData, { body, style, hatAnchor, ...joints });
@@ -1749,6 +1765,30 @@ function robloxRig(body, mats, pivot) {
   mk(1.8, 1.4, 0.08, mats.cape, 0, -0.7, 0, capeTop);
   const capeLow = pivot(0, -1.4, 0, capeTop);
   mk(1.8, 1.3, 0.08, mats.cape, 0, -0.65, 0, capeLow);
+  return { head, legL, legR, armL, armR, capeTop, capeLow };
+}
+// Minecraft creeper: big cube head, tall body, four stubby legs and no arms. Legs swing in
+// diagonal pairs (front-left with back-right) so it trots; the arm and cape joints stay empty
+function creeperRig(body, mats, pivot) {
+  const mk = (sx, sy, sz, mat, x, y, z, parent) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), mat);
+    m.position.set(x, y, z); m.castShadow = true; parent.add(m); return m;
+  };
+  const C = mats.creeper;
+  mk(1.6, 2.4, 0.8, C, 0, -0.1, 0, body);
+  const head = pivot(0, 1.1, 0);
+  mk(1.6, 1.6, 1.6, [C, C, C, C, mats.creeperFace, C], 0, 0.8, 0, head);
+  const legPair = (sx) => {
+    const p = pivot(0, -1.3, 0);
+    for (const [x, z] of [[sx * 0.4, 0.4], [-sx * 0.4, -0.4]]) {
+      mk(0.8, 1.2, 0.8, C, x, -0.6, z, p);
+      mk(0.82, 0.25, 0.82, mats.creeperFeet, x, -1.08, z + 0.01, p);
+    }
+    return p;
+  };
+  const legL = legPair(-1), legR = legPair(1);
+  const armL = pivot(-0.8, 0.9, 0), armR = pivot(0.8, 0.9, 0);
+  const capeTop = pivot(0, 1.0, -0.42), capeLow = pivot(0, -1.4, 0, capeTop);
   return { head, legL, legR, armL, armR, capeTop, capeLow };
 }
 // paper-cutout cartoon kid, built big-boned: a huge wide head in front of a round coat,
@@ -2420,7 +2460,10 @@ let emote = null;   // { def, t }
 function explode() {
   for (let i = 0; i < 4; i++)
     burst(pl.x, pl.y, pl.z, 25, 24, tmpColor.setHSL(0.02 + Math.random() * 0.1, 1, 0.55), 1.3, 0.9, 25);
-  if (soundOn && actx) noiseHit(1.1, 0.9, 700);
+  if (soundOn && actx) {
+    noiseHit(1.1, 0.9, 700);
+    if (myStyle === 'creeper') noiseHit(0.5, 0.25, 6000, 0, 'highpass');   // sssss
+  }
   meme('boom');
   mpEvent({ t: 'boom' });
   stat('booms');
@@ -2996,21 +3039,26 @@ function addCustomOption() {
 for (const [k, s] of Object.entries(SKINS)) $('skin').add(new Option(s.name, k));
 for (const [k, name] of Object.entries(STYLES)) $('styleSel').add(new Option(name, k));
 $('styleSel').value = myStyle;
-$('styleSel').onchange = e => {
-  myStyle = e.target.value;
+function setStyle(st) {
+  myStyle = st; $('styleSel').value = st;
   buildBody(character, mats, myStyle);
   buildBody(ghost.char, ghostMats, myStyle); ghost.char.traverse(o => { o.castShadow = false; });
   try { localStorage.setItem('obbyStyle', myStyle); } catch (err) {}
   mpHello();
   burst(pl.x, pl.y, pl.z, 30, 10, null, 0.8, 0.5, 10);
-  e.target.blur();
-};
+}
+$('styleSel').onchange = e => { setStyle(e.target.value); e.target.blur(); };
 if (customSkin) addCustomOption();
 $('skin').value = savedSkin;
 syncPickers();
 $('skin').onchange = e => {
-  applySkin(skinFor(e.target.value));
-  syncPickers(); saveSkin(e.target.value); mpHello();
+  const sk = skinFor(e.target.value);
+  applySkin(sk);
+  syncPickers(); saveSkin(e.target.value);
+  // skins like the Creeper come with their own body
+  if (sk.style && sk.style !== myStyle) setStyle(sk.style);
+  else if (!sk.style && myStyle === 'creeper') setStyle('roblox');
+  mpHello();
   burst(pl.x, pl.y, pl.z, 30, 10, null, 0.8, 0.5, 10);
   e.target.blur();
 };
