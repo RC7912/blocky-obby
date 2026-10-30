@@ -4094,7 +4094,8 @@ function buildTower(id) {
   const sideOf = d => Math.floor((((d % P) + P) % P) / (2 * RING));
   const outward = d => [{ x: 0, z: -1 }, { x: 1, z: 0 }, { x: 0, z: 1 }, { x: -1, z: 0 }][sideOf(d)];
   addPart({ x: 0, y: -0.5, z: 0, sx: TOWER_HALF * 2, sy: 1, sz: TOWER_HALF * 2, mat: solidMat(TOWER_COLORS[0]) });
-  checkpoints.push({ x: 0, y: 3, z: 0, ang: 0 });
+  // start on the ring by the wall, where the climb begins (the middle has a structure in it)
+  checkpoints.push({ x: -4, y: 3, z: -RING, ang: Math.PI / 2 });
   let d = RING, y = 0, cp = 0, section = 0, plat = solidMat(TOWER_COLORS[0]);
   const sectionTops = [];
   const rise = () => hard ? R(2.4, 3.2) : easy ? R(1.6, 2.4) : R(2, 2.9);
@@ -4168,14 +4169,14 @@ function buildTower(id) {
     const sm = solidMat(shade(col, 0.82).getHex()), H = Math.min(h * 0.75, 14), b = y0 + 1;
     const kind = s % 3;
     if (kind === 0) {
-      // a room with a window in every wall
-      const half = 4.5, t = 0.5, win = 3, wy0 = H * 0.35, wy1 = H * 0.75;
+      // a room with a tall doorway in every wall, so you can always walk in and out
+      const half = 4.5, t = 0.5, win = 3, wy1 = H * 0.75;
       for (const [nx, nz] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) {
         const cx = nx * half, cz = nz * half, along = nz !== 0, piece = (u, v0, v1, w) =>
           addPart({ x: along ? cx + u : cx, y: b + (v0 + v1) / 2, z: along ? cz : cz + u, sx: along ? w : t, sy: v1 - v0, sz: along ? t : w, mat: sm });
         const side = (2 * half - win) / 2;
         piece(-half + side / 2, 0, H, side); piece(half - side / 2, 0, H, side);
-        piece(0, 0, wy0, win); piece(0, wy1, H, win);
+        piece(0, wy1, H, win);
       }
       addPart({ x: 0, y: b + H + 0.3, z: 0, sx: 2 * half + 1, sy: 0.6, sz: 2 * half + 1, mat: sm });
     } else if (kind === 1) {
