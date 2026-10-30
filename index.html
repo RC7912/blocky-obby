@@ -292,6 +292,7 @@
     <kbd>W A S D</kbd><span>Move</span>
     <kbd>Space</kbd><span>Jump · again in the air to double jump · next to a wall to wall-jump</span>
     <kbd>Mouse</kbd><span>Look around (click the game first) · wheel to zoom</span>
+    <kbd>I O</kbd><span>Zoom in / out</span>
     <kbd>Q E</kbd><span>Turn the camera</span>
     <kbd>1 – 9</kbd><span>Emotes</span>
     <kbd>X</kbd><span>Explode 💥</span>
@@ -4489,6 +4490,9 @@ function frame(now) {
   // camera
   if (keys.KeyQ) camYaw += dt * 2.5;
   if (keys.KeyE) camYaw -= dt * 2.5;
+  // hold I to zoom in, O to zoom out (same range as the mouse wheel)
+  if (keys.KeyI) camDist = Math.max(6, camDist - dt * 22);
+  if (keys.KeyO) camDist = Math.min(45, camDist + dt * 22);
   camTarget.lerp(new THREE.Vector3(pl.x, pl.y + 2, pl.z), Math.min(1, dt * 12));
   camera.position.set(
     camTarget.x + Math.sin(camYaw) * Math.cos(camPitch) * camDist,

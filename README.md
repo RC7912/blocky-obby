@@ -45,7 +45,7 @@ A Minecraft-style obby (obstacle course) generator that runs in your browser —
 | W A S D | Move |
 | Space | Jump (press again in the air to double jump) |
 | Mouse (click the game first) | Look around |
-| Mouse wheel | Zoom |
+| Mouse wheel, or I / O | Zoom in / out |
 | Q / E | Turn the camera |
 | 1 – 9 | Emotes |
 | X | Explode 💥 |
