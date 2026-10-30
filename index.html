@@ -1430,6 +1430,7 @@ function addPart(o) {
   else if (p.kill) mat = p.lava ? MAT.lava : MAT.magma;
   else if (p.vanish) mat = own(MAT.glass);
   else if (p.checkpoint !== undefined) mat = BLOCKS[p.block].map(own);
+  else if (p.mat) mat = p.mat;
   else mat = BLOCKS[p.block];
   p.mesh = new THREE.Mesh(partGeo(p), mat);
   p.mesh.position.set(p.x, p.y, p.z);
@@ -4057,53 +4058,85 @@ $('lavaBtn').onclick = e => {
 const TOWER_SECS_PER_STEP = { easy: 2.3, normal: 1.7, hard: 1.3 }, LAVA_HEAD_START = 6;
 let lavaSea = null;   // { mesh, y, speed, t }
 let towerOn = false;
+// Tower of Hell style: a square shaft of see-through pastel walls stacked in coloured
+// sections with white trim, and plain coloured platforms winding up the inside walls
+const TOWER_COLORS = [0xff7eb6, 0xb18cff, 0x7ee0a0, 0x7ec8ff, 0xffd36e, 0xff9e6e];
+const TOWER_HALF = 8;   // inner half-width of the shaft
 function buildTower(id) {
   const [, stagesS, diff] = courseKey.split('|');
   clearCourse();
   towerOn = true;
   const rng = mulberry32(hashStr('tower|' + id)), R = (a, b) => a + rng() * (b - a);
   const steps = Math.min(90, Math.max(24, +stagesS * 6)), hard = diff === 'hard', easy = diff === 'easy';
+  const solidMat = c => new THREE.MeshLambertMaterial({ color: c, emissive: new THREE.Color(c).multiplyScalar(0.18) });
+  const wallMat = c => new THREE.MeshLambertMaterial({ color: c, emissive: new THREE.Color(c).multiplyScalar(0.25), transparent: true, opacity: 0.3, depthWrite: false, side: THREE.DoubleSide });
+  const trim = new THREE.MeshBasicMaterial({ color: 0xffffff });
   const coin = (x, y, z) => {
     const mesh = new THREE.Mesh(coinGeo, MAT.coin);
     mesh.position.set(x, y, z); mesh.castShadow = true; course.add(mesh);
     const glow = new THREE.Sprite(coinGlow); glow.scale.setScalar(3.4); mesh.add(glow);
     coins.push({ x, y, z, mesh, got: false });
   };
-  const at = (a, r) => ({ x: Math.sin(a) * r, z: Math.cos(a) * r });
-  let a = 0, y = 0;
-  const spawn = addPart({ ...at(a, 10), y, sx: 8, sy: 1, sz: 8, yaw: a, block: theme.biomes[0] });
-  checkpoints.push({ x: spawn.x, y: y + 3, z: spawn.z, ang: a + Math.PI / 2 });
-  let cp = 0;
+  // a point on the square path 6 units in from the walls, d along its 48-unit perimeter
+  const sq = d => {
+    d = ((d % 48) + 48) % 48;
+    const side = Math.floor(d / 12), u = d % 12 - 6;
+    return [{ x: u, z: -6 }, { x: 6, z: u }, { x: -u, z: 6 }, { x: -6, z: -u }][side];
+  };
+  const sideYaw = d => Math.floor((((d % 48) + 48) % 48) / 12) * Math.PI / 2;
+  // ground floor filling the shaft
+  addPart({ x: 0, y: -0.5, z: 0, sx: TOWER_HALF * 2, sy: 1, sz: TOWER_HALF * 2, mat: solidMat(TOWER_COLORS[0]) });
+  checkpoints.push({ x: 0, y: 3, z: 0, ang: 0 });
+  let d = 6, y = 0, cp = 0, section = 0;
+  const sectionTops = [];
+  let mats = { plat: solidMat(TOWER_COLORS[0]) };
   for (let i = 1; i <= steps; i++) {
     buildStage = cp + 1;
-    a += R(0.42, 0.6); y += hard ? R(2.4, 3.3) : easy ? R(1.6, 2.4) : R(2, 2.9);
-    const r = R(9.5, 11), pos = at(a, r), blk = theme.biomes[Math.floor(i / 10) % theme.biomes.length];
-    const size = hard ? R(2.6, 3.4) : R(3.2, 4);
+    d += R(4.2, 5.2); y += hard ? R(2.4, 3.2) : easy ? R(1.6, 2.4) : R(2, 2.9);
+    const pos = sq(d), yaw = sideYaw(d), size = hard ? R(2.4, 3) : R(2.9, 3.6);
     if (i === steps || i % 12 === 0) {
-      // rest platform with a checkpoint (the last one is the finish at the top)
+      // landing with a checkpoint closes each coloured section (the last one is the top)
       const fin = i === steps;
-      const p = addPart({ ...pos, y, sx: 6, sy: 1, sz: 6, yaw: a, block: fin ? 'gold' : theme.cp });
+      addPart({ ...pos, y, sx: 5, sy: 1, sz: 5, yaw, mat: fin ? undefined : solidMat(0xffffff), block: fin ? 'gold' : 'grass' });
       cp++;
-      addPart({ x: p.x, y: y + 0.6, z: p.z, sx: 4, sy: 0.2, sz: 4, yaw: a, solid: false, block: fin ? 'diamond' : 'emerald', checkpoint: cp, finish: fin });
-      checkpoints.push({ x: p.x, y: y + 3.6, z: p.z, ang: a + Math.PI / 2 });
+      addPart({ ...pos, y: y + 0.6, sx: 3.6, sy: 0.2, sz: 3.6, yaw, solid: false, block: fin ? 'diamond' : 'emerald', checkpoint: cp, finish: fin });
+      checkpoints.push({ x: pos.x, y: y + 3.6, z: pos.z, ang: yaw + Math.PI / 2 });
       const label = textSprite(fin ? 'TOP!' : String(cp), fin ? '#ffd84a' : '#fff');
-      label.position.set(p.x, y + 6, p.z); course.add(label);
+      label.position.set(pos.x, y + 6, pos.z); course.add(label);
+      sectionTops.push(y + 1);
+      section++;
+      mats = { plat: solidMat(TOWER_COLORS[section % TOWER_COLORS.length]) };
       continue;
     }
-    const k = rng();
-    if (k < 0.12) addPart({ ...pos, y, sx: size, sy: 1, sz: size, yaw: a, block: 'planks', move: { axis: 'x', amp: 1.6, speed: R(1, 1.6), phase: R(0, 6.28) } });
-    else if (k < 0.22) addPart({ ...pos, y, sx: size, sy: 1, sz: size, yaw: a, block: 'glass', vanish: true });
-    else if (k < 0.3) { addPart({ ...pos, y, sx: size, sy: 1, sz: size, yaw: a, block: 'slime', bounce: true }); y += 5; }
-    else if (k < 0.37) addPart({ ...pos, y, sx: size, sy: 1, sz: size, yaw: a, block: 'ice' });
+    const k = rng(), base = { ...pos, y, sx: size, sy: 1, sz: size, yaw };
+    if (k < 0.12) addPart({ ...base, mat: mats.plat, move: { axis: 'x', amp: 1.4, speed: R(1, 1.6), phase: R(0, 6.28) } });
+    else if (k < 0.22) addPart({ ...base, block: 'glass', vanish: true });
+    else if (k < 0.3) { addPart({ ...base, block: 'slime', bounce: true }); y += 5; }
+    else if (k < 0.37) addPart({ ...base, block: 'ice' });
     else {
-      addPart({ ...pos, y, sx: size, sy: 1, sz: size, yaw: a, block: blk });
+      addPart({ ...base, mat: mats.plat });
       if (rng() < 0.3) coin(pos.x, y + 2.3, pos.z);
     }
   }
   buildStage = 0;
-  // the column the stairs wind around
+  // walls: one see-through coloured band per section, with white trim at every seam
+  let y0 = -1;
+  sectionTops.forEach((y1, k) => {
+    const h = y1 - y0, cy = (y0 + y1) / 2, wm = wallMat(TOWER_COLORS[k % TOWER_COLORS.length]), W = TOWER_HALF * 2 + 1.2;
+    for (const [x, z, sx, sz] of [[0, -TOWER_HALF - 0.3, W, 0.6], [0, TOWER_HALF + 0.3, W, 0.6], [-TOWER_HALF - 0.3, 0, 0.6, W], [TOWER_HALF + 0.3, 0, 0.6, W]]) {
+      const wall = addPart({ x, y: cy, z, sx, sy: h, sz, mat: wm });
+      wall.mesh.castShadow = false; wall.mesh.renderOrder = 1;
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(sx + 0.1, 0.35, sz + 0.1), trim);
+      bar.position.set(x, y1, z); course.add(bar);
+    }
+    // white corner posts
+    for (const [x, z] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.7, h, 0.7), trim);
+      post.position.set(x * (TOWER_HALF + 0.3), cy, z * (TOWER_HALF + 0.3)); course.add(post);
+    }
+    y0 = y1;
+  });
   const top = y + 2;
-  addPart({ x: 0, y: top / 2 - 2, z: 0, sx: 8, sy: top + 4, sz: 8, block: theme.biomes[1] });
   totalStages = cp; $('total').textContent = cp;
   makeClouds(-80, 80, -80, 80, 0, top);
   makeDecor(theme.decor, -80, 80, -80, 80, 0);
